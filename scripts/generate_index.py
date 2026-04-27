@@ -24,8 +24,8 @@ from pathlib import Path
 
 _INDEX_NAME = "index.json"
 
-_MANIFEST_DIRECTORIES = (".tic", "docs", "projects", "scripts")
-_SYMBOL_DIRECTORIES = ("projects", "scripts")
+_MANIFEST_DIRECTORIES = (".tic", "docs", "scripts", "src", "tests")
+_SYMBOL_DIRECTORIES = ("scripts", "src", "tests")
 
 _EXCLUDED_DIRS = frozenset({"__pycache__", ".pytest_cache", ".venv"})
 _PYTHON_SUFFIX = ".py"
