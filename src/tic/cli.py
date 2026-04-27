@@ -9,10 +9,15 @@ from pathlib import Path
 
 import uvicorn
 from dotenv import load_dotenv
+from watchfiles import awatch
 
+from tic.bus import Bus
 from tic.config import ConfigurationError, Settings
+from tic.events import SavefileChangeDetected
 
 _log = logging.getLogger("uvicorn.error")
+
+_AUTOSAVE_NAMES = {"Autosave.json", "Autosave.gz"}
 
 
 def main() -> None:
@@ -30,22 +35,24 @@ def main() -> None:
 
 
 async def _run(settings: Settings) -> None:
+    bus = Bus()
     server = uvicorn.Server(
         uvicorn.Config("tic.app:app", host="127.0.0.1", port=settings.port)
     )
     await asyncio.gather(
         server.serve(),
-        _watch(settings),
+        _watch(settings.watch_dir, bus),
     )
 
 
-async def _watch(settings: Settings) -> None:
-    from watchfiles import awatch
-
-    _log.info("Watching %s", settings.watch_dir)
-    async for _ in awatch(settings.watch_dir, watch_filter=_autosave_filter):
-        pass  # watcher events will be wired to the bus in a later step
+async def _watch(watch_dir: Path, bus: Bus) -> None:
+    _log.info("Watching %s", watch_dir)
+    async for changes in awatch(watch_dir, watch_filter=_autosave_filter):
+        for _, path in changes:
+            await bus.publish(
+                "savefile.detected", SavefileChangeDetected(path=Path(path))
+            )
 
 
 def _autosave_filter(change: object, path: str) -> bool:
-    return Path(path).name in {"Autosave.json", "Autosave.gz"}
+    return Path(path).name in _AUTOSAVE_NAMES

@@ -1,6 +1,6 @@
 """Generate a combined index file: project file list + symbol maps.
 
-Output: .tic/index.json  (or <output-dir>/index.json)
+Output: build/index.json  (or <output-dir>/index.json)
 
 Schema:
   {
@@ -61,7 +61,7 @@ def _parse_output_directory(argv: list[str]) -> Path | None:
         return None
     if len(argv) == _ARG_COUNT_WITH_OUTPUT_DIR:
         return Path(argv[1]).expanduser().resolve()
-    return Path(__file__).resolve().parents[1] / ".tic"
+    return Path(__file__).resolve().parents[1] / "build"
 
 
 # -- file list ----------------------------------------------------------------
