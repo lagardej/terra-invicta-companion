@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from tic.shared.events.base import Message
 from tic.shared.events.campaign import CampaignParsed, GlobalValuesState, PlayerState
 from tic.shared.events.savefile import SaveFileProcessingSucceeded
 
@@ -24,7 +25,7 @@ class ProcessSavefile:
     data: dict
 
 
-def handle(command: ProcessSavefile) -> Iterator[object]:
+def handle(command: ProcessSavefile) -> Iterator[Message]:
     """Handle a ProcessSavefile command."""
     t0 = time.perf_counter()
     gamestates = command.data.get("gamestates", {})

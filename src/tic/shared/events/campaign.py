@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from tic.shared.events.base import DomainEvent
+
 
 @dataclass(frozen=True)
 class GlobalValuesState:
@@ -28,8 +30,13 @@ class PlayerState:
 
 
 @dataclass(frozen=True)
-class CampaignParsed:
+class CampaignParsed(DomainEvent):
     """Emitted when campaign data has been extracted from a savefile."""
 
     global_values: GlobalValuesState | None
     players: tuple[PlayerState, ...]
+
+    @classmethod
+    def type(cls) -> str:
+        """Return the unique string identifier for this message type."""
+        return "campaign.parsed"

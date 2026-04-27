@@ -38,7 +38,7 @@ def main() -> None:
 
 async def _run(settings: Settings) -> None:
     bus = Bus()
-    bus.subscribe("savefile.detected", partial(on_savefile_detected, bus=bus))
+    bus.subscribe(SavefileChangeDetected, partial(on_savefile_detected, bus=bus))
     server = uvicorn.Server(
         uvicorn.Config("tic.app:app", host="127.0.0.1", port=settings.port)
     )
@@ -52,9 +52,7 @@ async def _watch(watch_dir: Path, bus: Bus) -> None:
     _log.info("Watching %s", watch_dir)
     async for changes in awatch(watch_dir, watch_filter=_autosave_filter):
         for _, path in changes:
-            await bus.publish(
-                "savefile.detected", SavefileChangeDetected(path=Path(path))
-            )
+            await bus.publish(SavefileChangeDetected(path=Path(path)))
 
 
 def _autosave_filter(change: object, path: str) -> bool:

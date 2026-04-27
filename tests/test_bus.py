@@ -1,8 +1,29 @@
 """Tests for the async message bus."""
 
+from __future__ import annotations
+
+from dataclasses import dataclass
+
 import pytest
 
 from tic.bus import Bus
+from tic.shared.events.base import DomainEvent, IntegrationEvent
+
+
+@dataclass(frozen=True)
+class _SaveDetected(IntegrationEvent):
+    path: str
+
+    @classmethod
+    def type(cls) -> str:
+        return "savefile.detected"
+
+
+@dataclass(frozen=True)
+class _ImportSucceeded(DomainEvent):
+    @classmethod
+    def type(cls) -> str:
+        return "savefile.import_succeeded"
 
 
 class TestBus:
@@ -16,10 +37,11 @@ class TestBus:
         async def handler(payload: object) -> None:
             received.append(payload)
 
-        bus.subscribe("save.detected", handler)
-        await bus.publish("save.detected", "payload_a")
+        event = _SaveDetected(path="/saves/Autosave.json")
+        bus.subscribe(_SaveDetected, handler)
+        await bus.publish(event)
 
-        assert received == ["payload_a"]
+        assert received == [event]
 
     @pytest.mark.unit
     async def test_multiple_handlers_all_called(self) -> None:
@@ -32,26 +54,28 @@ class TestBus:
         async def handler_b(payload: object) -> None:
             received.append(("b", payload))
 
-        bus.subscribe("save.detected", handler_a)
-        bus.subscribe("save.detected", handler_b)
-        await bus.publish("save.detected", "x")
+        event = _SaveDetected(path="/saves/Autosave.json")
+        bus.subscribe(_SaveDetected, handler_a)
+        bus.subscribe(_SaveDetected, handler_b)
+        await bus.publish(event)
 
-        assert ("a", "x") in received
-        assert ("b", "x") in received
+        assert ("a", event) in received
+        assert ("b", event) in received
 
     @pytest.mark.unit
     async def test_unrelated_event_not_dispatched(self) -> None:
         bus = Bus()
         received: list[object] = []
 
-        async def handler(payload: object) -> None: ...
+        async def handler(payload: object) -> None:
+            received.append(payload)
 
-        bus.subscribe("save.detected", handler)
-        await bus.publish("import.succeeded", "y")
+        bus.subscribe(_SaveDetected, handler)
+        await bus.publish(_ImportSucceeded())
 
         assert received == []
 
     @pytest.mark.unit
     async def test_no_subscribers_publish_is_silent(self) -> None:
         bus = Bus()
-        await bus.publish("save.detected", "z")
+        await bus.publish(_SaveDetected(path="/saves/Autosave.json"))

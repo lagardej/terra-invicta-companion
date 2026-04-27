@@ -1,13 +1,13 @@
-"""Async message bus — functional core, no I/O."""
+"""Async message bus."""
 
 from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
 
-type Payload = object
+from tic.shared.events.base import Message
 
-Handler = Callable[[Payload], Awaitable[None]]
+Handler = Callable[[Message], Awaitable[None]]
 
 
 class Bus:
@@ -17,11 +17,11 @@ class Bus:
         """Initialise with an empty handler registry."""
         self._handlers: dict[str, list[Handler]] = defaultdict(list)
 
-    def subscribe(self, event: str, handler: Handler) -> None:
-        """Register a handler for an event type."""
-        self._handlers[event].append(handler)
+    def subscribe(self, event_class: type[Message], handler: Handler) -> None:
+        """Register a handler for a message type."""
+        self._handlers[event_class.type()].append(handler)
 
-    async def publish(self, event: str, payload: Payload) -> None:
-        """Dispatch payload to all handlers subscribed to event."""
-        for handler in self._handlers[event]:
-            await handler(payload)
+    async def publish(self, event: Message) -> None:
+        """Dispatch event to all handlers subscribed to its type."""
+        for handler in self._handlers[type(event).type()]:
+            await handler(event)

@@ -12,6 +12,7 @@ import pytest
 from tic.bus import Bus
 from tic.cli import _autosave_filter, _watch
 from tic.savefile.process.shell import on_savefile_detected
+from tic.shared.events.base import Message
 from tic.shared.events.campaign import CampaignParsed
 from tic.shared.events.savefile import (
     SavefileChangeDetected,
@@ -40,7 +41,7 @@ class TestAutosaveFilter:
 
 
 class TestWatch:
-    """Watcher publishes SavefileDetected on the bus."""
+    """Watcher publishes SavefileChangeDetected on the bus."""
 
     @pytest.mark.unit
     async def test_publishes_savefile_detected(self, tmp_path: Path) -> None:
@@ -50,10 +51,10 @@ class TestWatch:
         bus = Bus()
         received: list[object] = []
 
-        async def handler(payload: object) -> None:
+        async def handler(payload: Message) -> None:
             received.append(payload)
 
-        bus.subscribe("savefile.detected", handler)
+        bus.subscribe(SavefileChangeDetected, handler)
 
         from unittest.mock import patch
 
@@ -121,10 +122,11 @@ class TestOnSavefileDetected:
         bus = Bus()
         received: list[object] = []
 
-        async def handler(payload: object) -> None:
+        async def handler(payload: Message) -> None:
             received.append(payload)
 
-        bus.subscribe("savefile.imported", handler)
+        bus.subscribe(CampaignParsed, handler)
+        bus.subscribe(SaveFileProcessingSucceeded, handler)
         await on_savefile_detected(SavefileChangeDetected(path=save), bus=bus)
 
         assert any(isinstance(e, CampaignParsed) for e in received)
@@ -146,10 +148,10 @@ class TestOnSavefileDetected:
         bus = Bus()
         received: list[object] = []
 
-        async def handler(payload: object) -> None:
+        async def handler(payload: Message) -> None:
             received.append(payload)
 
-        bus.subscribe("savefile.imported", handler)
+        bus.subscribe(SavefileProcessingFailed, handler)
         await on_savefile_detected(SavefileChangeDetected(path=save), bus=bus)
 
         assert len(received) == 1
@@ -165,10 +167,10 @@ class TestOnSavefileDetected:
         bus = Bus()
         received: list[object] = []
 
-        async def handler(payload: object) -> None:
+        async def handler(payload: Message) -> None:
             received.append(payload)
 
-        bus.subscribe("savefile.imported", handler)
+        bus.subscribe(SavefileProcessingFailed, handler)
         await on_savefile_detected(SavefileChangeDetected(path=save), bus=bus)
 
         assert len(received) == 1
