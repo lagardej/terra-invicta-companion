@@ -1,4 +1,4 @@
-"""Read model — immutable data carriers for parsed savefile data."""
+"""Campaign domain events and their value objects."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from datetime import datetime
 
 
 @dataclass(frozen=True)
-class GlobalValues:
+class GlobalValuesState:
     """Campaign-level settings extracted from TIGlobalValuesState."""
 
     difficulty: int
@@ -18,7 +18,7 @@ class GlobalValues:
 
 
 @dataclass(frozen=True)
-class PlayerInfo:
+class PlayerState:
     """One player (human or AI) extracted from TIPlayerState."""
 
     id: int
@@ -28,8 +28,8 @@ class PlayerInfo:
 
 
 @dataclass(frozen=True)
-class CampaignSnapshot:
-    """Top-level result of parsing a single savefile."""
+class CampaignParsed:
+    """Emitted when campaign data has been extracted from a savefile."""
 
-    global_values: GlobalValues | None
-    players: list[PlayerInfo]
+    global_values: GlobalValuesState | None
+    players: tuple[PlayerState, ...]
