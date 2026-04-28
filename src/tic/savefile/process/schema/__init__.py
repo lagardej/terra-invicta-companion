@@ -1,0 +1,1 @@
+"""Savefile schema models."""
