@@ -532,6 +532,18 @@ wheels = [
 ]
 
 [[package]]
+name = "returns"
+version = "0.27.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a9/d5/a3208e3193848ecfec2adb689f474cc6c66c4b7e1711c31528c5b3cfbc93/returns-0.27.0.tar.gz", hash = "sha256:f70a452dd81e6d024c97523683aba85076b15e00874e723afb23bcf3aa4ecea2", size = 105261, upload-time = "2026-04-14T07:11:21.206Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ab/9c/1db56b3a26b56abde214833556c83af7e9817999bc05163c9e1bf200952d/returns-0.27.0-py3-none-any.whl", hash = "sha256:a84f243b9a17e9b96c16b709f5cca819550c38a2fc4db725ee2539354956af12", size = 160133, upload-time = "2026-04-14T07:11:23.187Z" },
+]
+
+[[package]]
 name = "ruff"
 version = "0.15.12"
 source = { registry = "https://pypi.org/simple" }
@@ -593,7 +605,9 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "jinja2" },
+    { name = "pydantic" },
     { name = "python-dotenv" },
+    { name = "returns" },
     { name = "uvicorn" },
     { name = "watchfiles" },
 ]
@@ -618,7 +632,9 @@ dev = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.136.1,<1" },
     { name = "jinja2", specifier = ">=3.1.6,<4" },
+    { name = "pydantic", specifier = ">=2.13.3,<3" },
     { name = "python-dotenv", specifier = ">=1.2.2,<2" },
+    { name = "returns", specifier = ">=0.27.0,<1" },
     { name = "uvicorn", specifier = ">=0.46.0,<1" },
     { name = "watchfiles", specifier = ">=1.1.1,<2" },
 ]
