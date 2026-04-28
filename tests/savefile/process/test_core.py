@@ -14,7 +14,7 @@ from tic.shared.events.savefile import (
     SaveFileProcessingSucceeded,
 )
 
-_FIXTURES = Path(__file__).parent.parent.parent / "fixtures"
+_FIXTURES = Path(__file__).parent / "fixtures"
 _MINIMAL = _FIXTURES / "autosave_minimal.json"
 
 _GLOBAL_VALUES_KEY = "PavonisInteractive.TerraInvicta.TIGlobalValuesState"

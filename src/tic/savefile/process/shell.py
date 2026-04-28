@@ -3,21 +3,29 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Coroutine
+from typing import Any
 
-from tic.bus import Bus
 from tic.savefile.process.core import ProcessSavefile, handle
 from tic.shared.events.base import Message
 from tic.shared.events.savefile import (
     SavefileChangeDetected,
     SavefileProcessingFailed,
 )
+from tic.shared.message_bus import MessageBus
 
-_TOPIC = "savefile.imported"
+
+def subscriptions() -> tuple[
+    tuple[type[Message], Callable[..., Coroutine[Any, Any, None]]], ...
+]:
+    """Return subscription entries for this module."""
+    return ((SavefileChangeDetected, on_savefile_detected),)
 
 
-async def on_savefile_detected(event: Message, *, bus: Bus) -> None:
+async def on_savefile_detected(
+    event: SavefileChangeDetected, *, bus: MessageBus
+) -> None:
     """Read, parse and publish the result of a savefile import."""
-    assert isinstance(event, SavefileChangeDetected)
     try:
         data = json.loads(event.path.read_text(encoding="utf-8"))
         command = ProcessSavefile(path=event.path, data=data)

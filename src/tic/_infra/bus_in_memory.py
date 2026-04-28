@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Awaitable, Callable
 
 from tic.shared.events.base import Message
+from tic.shared.message_bus import Handler, MessageBus
 
-Handler = Callable[[Message], Awaitable[None]]
 
-
-class Bus:
+class MessageBusInMemory(MessageBus):
     """Simple async publish/subscribe bus."""
 
     def __init__(self) -> None:

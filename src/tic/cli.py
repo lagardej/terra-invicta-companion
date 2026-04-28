@@ -5,17 +5,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
-from functools import partial
 from pathlib import Path
 
-import uvicorn
 from dotenv import load_dotenv
 from watchfiles import awatch
 
-from tic.bus import Bus
+from tic._config import message_bus, uvicorn_server
 from tic.config import ConfigurationError, Settings
-from tic.savefile.process.shell import on_savefile_detected
 from tic.shared.events.savefile import SavefileChangeDetected
+from tic.shared.message_bus import MessageBus
 
 _log = logging.getLogger("uvicorn.error")
 
@@ -37,18 +35,14 @@ def main() -> None:
 
 
 async def _run(settings: Settings) -> None:
-    bus = Bus()
-    bus.subscribe(SavefileChangeDetected, partial(on_savefile_detected, bus=bus))
-    server = uvicorn.Server(
-        uvicorn.Config("tic.app:app", host="127.0.0.1", port=settings.port)
-    )
+    server = uvicorn_server(port=settings.port)
     await asyncio.gather(
         server.serve(),
-        _watch(settings.watch_dir, bus),
+        _watch(settings.watch_dir, message_bus()),
     )
 
 
-async def _watch(watch_dir: Path, bus: Bus) -> None:
+async def _watch(watch_dir: Path, bus: MessageBus) -> None:
     _log.info("Watching %s", watch_dir)
     async for changes in awatch(watch_dir, watch_filter=_autosave_filter):
         for _, path in changes:

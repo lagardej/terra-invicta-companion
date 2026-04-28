@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from tic.bus import Bus
+from tic._infra.bus_in_memory import MessageBusInMemory
 from tic.shared.events.base import DomainEvent, IntegrationEvent
 
 
@@ -31,7 +31,7 @@ class TestBus:
 
     @pytest.mark.unit
     async def test_subscribed_handler_is_called(self) -> None:
-        bus = Bus()
+        bus = MessageBusInMemory()
         received: list[object] = []
 
         async def handler(payload: object) -> None:
@@ -45,7 +45,7 @@ class TestBus:
 
     @pytest.mark.unit
     async def test_multiple_handlers_all_called(self) -> None:
-        bus = Bus()
+        bus = MessageBusInMemory()
         received: list[object] = []
 
         async def handler_a(payload: object) -> None:
@@ -64,7 +64,7 @@ class TestBus:
 
     @pytest.mark.unit
     async def test_unrelated_event_not_dispatched(self) -> None:
-        bus = Bus()
+        bus = MessageBusInMemory()
         received: list[object] = []
 
         async def handler(payload: object) -> None:
@@ -77,5 +77,5 @@ class TestBus:
 
     @pytest.mark.unit
     async def test_no_subscribers_publish_is_silent(self) -> None:
-        bus = Bus()
+        bus = MessageBusInMemory()
         await bus.publish(_SaveDetected(path="/saves/Autosave.json"))

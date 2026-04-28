@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from tic.bus import Bus
+from tic._infra.bus_in_memory import MessageBusInMemory
 from tic.cli import _autosave_filter, _watch
 from tic.savefile.process.shell import on_savefile_detected
 from tic.shared.events.base import Message
@@ -48,7 +48,7 @@ class TestWatch:
         save = tmp_path / "Autosave.json"
         save.write_text("{}", encoding="utf-8")
 
-        bus = Bus()
+        bus = MessageBusInMemory()
         received: list[object] = []
 
         async def handler(payload: Message) -> None:
@@ -119,7 +119,7 @@ class TestOnSavefileDetected:
             ),
             encoding="utf-8",
         )
-        bus = Bus()
+        bus = MessageBusInMemory()
         received: list[object] = []
 
         async def handler(payload: Message) -> None:
@@ -145,7 +145,7 @@ class TestOnSavefileDetected:
         self, tmp_path: Path
     ) -> None:
         save = tmp_path / "Autosave.json"
-        bus = Bus()
+        bus = MessageBusInMemory()
         received: list[object] = []
 
         async def handler(payload: Message) -> None:
@@ -164,7 +164,7 @@ class TestOnSavefileDetected:
     ) -> None:
         save = tmp_path / "Autosave.json"
         save.write_text("not json", encoding="utf-8")
-        bus = Bus()
+        bus = MessageBusInMemory()
         received: list[object] = []
 
         async def handler(payload: Message) -> None:
