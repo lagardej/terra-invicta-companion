@@ -2,17 +2,23 @@
 """Extract each key under the top-level `gamestates` key from a JSON file.
 
 Usage:
-  python3 scripts/extract_gamestates.py \
-    --input .tic/human/Autosave.json \
-    --outdir out_gamestates
+    python3 scripts/extract_gamestates.py \
+        .tic/human/Autosave.json \
+        --outdir build/gamestates
 
-By default the script writes each gamestate key's content to a separate
-JSON file named with a sanitized version of the key inside `outdir`.
+The script accepts a required positional `input_path` (the JSON file to read) and
+supports gzipped inputs (files ending with ``.gz``); gzipped files are read
+transparently when the filename ends with ``.gz``. When ``--outdir`` is not provided the
+output directory defaults to ``build/gamestates``.
+
+By default the script writes each gamestate key's content to a separate JSON file named
+with a sanitized version of the key and places those files in the output directory.
 """
 
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import re
 from pathlib import Path
@@ -21,9 +27,9 @@ from pathlib import Path
 def sanitize_filename(name: str, max_len: int = 200) -> str:
     """Return a filesystem-safe filename derived from ``name``.
 
-    Non-alphanumeric characters are replaced with underscores, repeated
-    underscores are collapsed, and the result is truncated to ``max_len``
-    characters. If the result would be empty, returns "key".
+    Non-alphanumeric characters are replaced with underscores; repeated underscores
+    are collapsed and the result is truncated to ``max_len`` characters. If the
+    result would be empty, returns "key".
     """
     # Replace non-alphanumeric characters with underscore
     s = re.sub(r"[^A-Za-z0-9._-]", "_", name)
@@ -35,8 +41,8 @@ def sanitize_filename(name: str, max_len: int = 200) -> str:
 def _get_id(elem: object) -> str | None:
     """Try to discover an identifier for an element.
 
-    Looks for common patterns such as ``Key.value`` or
-    ``Value.ID.value`` and returns the string form if found.
+    Looks for common patterns such as ``Key.value`` or ``Value.ID.value`` and
+    returns the string form if found.
     """
     if not isinstance(elem, dict):
         return None
@@ -110,13 +116,17 @@ def extract_gamestates(
 ) -> None:
     """Read the JSON file at ``input_path`` and extract the top-level ``gamestates``.
 
-    Each key/value pair in ``gamestates`` is written as a separate
-    JSON file into ``outdir`` using a sanitized filename. If
-    ``to_stdout`` is True the contents are printed instead of
-    written to disk.
+    Each key/value pair in ``gamestates`` is written as a separate JSON file into
+    ``outdir`` using a sanitized filename. If ``to_stdout`` is True the contents are
+    printed instead of written to disk.
     """
-    with input_path.open("r", encoding="utf-8") as fh:
-        data = json.load(fh)
+    # Support plain JSON files and gzipped JSON files (ending with .gz)
+    if input_path.suffix == ".gz":
+        with gzip.open(str(input_path), "rt", encoding="utf-8") as fh:
+            data = json.load(fh)
+    else:
+        with input_path.open("r", encoding="utf-8") as fh:
+            data = json.load(fh)
 
     if "gamestates" not in data:
         raise KeyError("Top-level key 'gamestates' not found in JSON")
@@ -156,17 +166,15 @@ def main(argv: list[str] | None = None) -> int:
         description="Extract gamestates from a large Autosave JSON"
     )
     p.add_argument(
-        "--input",
-        "-i",
+        "input_path",
         type=Path,
-        default=Path(".tic/human/Autosave.json"),
         help="Path to the JSON file",
     )
     p.add_argument(
         "--outdir",
         "-o",
         type=Path,
-        default=Path("out_gamestates"),
+        default=Path("build/gamestates"),
         help="Directory to write extracted files",
     )
     p.add_argument(
@@ -187,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         extract_gamestates(
-            args.input, args.outdir, to_stdout=args.stdout, mode=args.mode
+            args.input_path, args.outdir, to_stdout=args.stdout, mode=args.mode
         )
     except Exception as e:
         print("Error:", e)
