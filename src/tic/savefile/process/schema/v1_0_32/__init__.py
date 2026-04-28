@@ -1,1 +1,1 @@
-"""Schema package for savefile process v1.0.32."""
+"""Schema package for Terra Invicta v1.0.32 savefile."""
