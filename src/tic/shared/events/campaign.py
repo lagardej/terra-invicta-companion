@@ -1,43 +1,36 @@
-"""Campaign domain events and their value objects."""
-
-from __future__ import annotations
+"""Events related to campaign."""
 
 from dataclasses import dataclass
 from datetime import datetime
 
-from tic.shared.events.base import DomainEvent
+from tic.shared.events.base import IntegrationEvent
 
 
 @dataclass(frozen=True)
-class CampaignParsed(DomainEvent):
-    """Emitted when campaign data has been extracted from a savefile."""
+class CampaignDataExtracted(IntegrationEvent):
+    """Emitted when campaign data was extracted from a savefile."""
 
-    global_values: GlobalValuesState
-    players: tuple[PlayerState, ...]
+    campaign_start_version: str
+    current_date_time: datetime
+    current_quarter_since_start: int
+    days_in_campaign: int
+    difficulty: int
+    latest_save_version: str
+    real_world_campaign_start: datetime
+    scenario_customizations: ScenarioCustomizations
+    start_difficulty: int
+    template_name: str
 
     @classmethod
     def type(cls) -> str:
         """Return the unique string identifier for this message type."""
-        return "campaign.parsed"
-
-
-@dataclass(frozen=True)
-class GlobalValuesState:
-    """Campaign-level settings extracted from TIGlobalValuesState."""
-
-    difficulty: int
-    campaign_start_version: str
-    latest_save_version: str
-    real_world_campaign_start: datetime
-    scenario_customizations: ScenarioCustomizations
+        return "campaign.data_extracted"
 
 
 @dataclass(frozen=True)
 class ScenarioCustomizations:
-    """Parsed `scenarioCustomizations` from TIGlobalValuesState."""
+    """ScenarioCustomizations."""
 
-    using_customizations: bool
-    custom_difficulty: bool
     add_alien_assault_carrier_fleet: bool
     alien_progression_speed: float
     average_monthly_events: int
@@ -45,6 +38,7 @@ class ScenarioCustomizations:
     cinematic_combat_realism_scale: bool
     control_point_maintenance_freebie_bonus_ai: int
     control_point_maintenance_freebie_bonus: int
+    custom_difficulty: bool
     hab_construction_speed_alien: float
     hab_construction_speed_human_ai: float
     hab_construction_speed_player: float
@@ -61,13 +55,8 @@ class ScenarioCustomizations:
     ship_construction_speed_alien: float
     ship_construction_speed_human_ai: float
     ship_construction_speed_player: float
-
-
-@dataclass(frozen=True)
-class PlayerState:
-    """One player (human or AI) extracted from TIPlayerState."""
-
-    id: int
-    name: str
-    faction_id: int
-    is_ai: bool
+    show_triggered_projects: bool
+    skip_starting_councilors: tuple[bool, ...]
+    use_player_country_for_starting_councilor: bool
+    using_customizations: bool
+    variable_project_unlocks: bool

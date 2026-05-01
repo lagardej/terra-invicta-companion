@@ -19,7 +19,7 @@ class MessageBusInMemory(MessageBus):
         """Register a handler for a message type."""
         self._handlers[event_class.type()].append(handler)
 
-    async def publish(self, event: Message) -> None:
+    async def _publish(self, event: Message) -> None:
         """Dispatch event to all handlers subscribed to its type."""
         for handler in self._handlers[type(event).type()]:
             await handler(event)

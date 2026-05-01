@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -18,18 +18,17 @@ class SavefileChangeDetected(IntegrationEvent):
     @classmethod
     def type(cls) -> str:
         """Return the unique string identifier for this message type."""
-        return "savefile.detected"
+        return "savefile.change_detected"
 
 
 @dataclass(frozen=True)
-class SaveFileProcessingSucceeded(DomainEvent):
+class SavefileProcessingSucceeded(DomainEvent):
     """Emitted when a savefile was parsed successfully."""
 
-    path: Path
-    campaign_start: datetime
-    player_faction_key: str
-    duration_ms: float
-    player_count: int
+    real_world_campaign_start: datetime
+    player_faction: int
+    current_date_time: datetime
+    duration_ms: int
 
     @classmethod
     def type(cls) -> str:
@@ -41,8 +40,10 @@ class SaveFileProcessingSucceeded(DomainEvent):
 class SavefileProcessingFailed(DomainEvent):
     """Emitted when a savefile could not be parsed."""
 
-    path: Path
     reason: str
+    real_world_campaign_start: datetime | None = field(default=None)
+    player_faction: int | None = field(default=None)
+    current_date_time: datetime | None = field(default=None)
 
     @classmethod
     def type(cls) -> str:

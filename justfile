@@ -133,3 +133,13 @@ fmt:
 # Autofix lint and format issues
 [group('fix')]
 autofix: (fix) (fmt)
+
+# Generate the site/index using scripts/generate_index.py
+[group('scripts')]
+gen-index *args="":
+    uv run python scripts/generate_index.py {{ args }}
+
+# Validate a savefile against the Pydantic schema and report model errors
+[group('scripts')]
+validate-save *args:
+    uv run python scripts/validate_savefile.py {{ args }}
