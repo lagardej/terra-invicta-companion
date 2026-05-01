@@ -1,0 +1,42 @@
+image: python:3.14-slim
+
+stages:
+  - lint
+  - test
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  paths:
+    - .cache/pip/
+
+before_script:
+  - apt-get update -y && apt-get install -y git build-essential
+  - python -m pip install --upgrade pip
+
+lint:
+  stage: lint
+  script:
+    - pip install ruff pyright
+    - ruff format --check .
+    - ruff check .
+    - pyright .
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+    - if: $CI_COMMIT_BRANCH
+
+test:
+  stage: test
+  script:
+    - pip install -e . || true
+    - pip install pytest pytest-cov pytest-html pytest-asyncio pytest-xdist
+    - pytest --cov
+  artifacts:
+    when: always
+    paths:
+      - build/reports/pytest-cov
+      - build/reports/pytest-html
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+    - if: $CI_COMMIT_BRANCH
