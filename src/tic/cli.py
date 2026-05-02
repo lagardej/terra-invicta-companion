@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
+import uvicorn
 from watchfiles import Change, awatch
 
-from tic._config import build_server, configure_logging
-from tic.config import ConfigurationError, Settings
+from tic._config import Application, boot
 from tic.shared.events.savefile import SavefileChangeDetected
 from tic.shared.message_bus import MessageBus
 
@@ -21,27 +19,23 @@ _AUTOSAVE_NAMES = {"Autosave.json", "Autosave.gz"}
 
 
 def main() -> None:
-    """Load settings and run the application."""
-    try:
-        load_dotenv()
-        settings = Settings.load()
-    except ConfigurationError as exc:
-        print(f"Configuration error: {exc}", file=sys.stderr)
-        sys.exit(1)
-
-    configure_logging(settings.log_level, settings.app_dir)
+    """Boot the container, and run the application."""
+    app = boot()
 
     try:
-        asyncio.run(_run(settings))
+        asyncio.run(_run(app))
     except KeyboardInterrupt:
         pass
 
 
-async def _run(settings: Settings) -> None:
-    server, bus = build_server(port=settings.port)
+async def _run(app: Application) -> None:
+    message_bus = app.resolve(MessageBus)
+    web_server = app.resolve(uvicorn.Server)
+    watch_dir = app.settings.watch_dir
+
     await asyncio.gather(
-        server.serve(),
-        _watch(settings.watch_dir, bus),
+        web_server.serve(),
+        _watch(watch_dir, message_bus),
     )
 
 
