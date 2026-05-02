@@ -1,5 +1,6 @@
-"""Configuration package — application dependency injection container."""
+"""Configuration package."""
 
-from .wiring import Container
+from .logging import configure as configure_logging
+from .wiring import build_server
 
-__all__ = ["Container"]
+__all__ = ["build_server", "configure_logging"]

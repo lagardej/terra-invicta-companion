@@ -1,9 +1,10 @@
-"""Dependency injection container — owns construction and wiring of all services."""
+"""Application wiring — builds the lagom container and exposes the server."""
 
 from __future__ import annotations
 
 import uvicorn
 from fastapi import FastAPI
+from lagom import Container
 
 from tic._infra.bus_in_memory import MessageBusInMemory
 from tic._infra.document_store_in_memory import DocumentStoreInMemory
@@ -11,46 +12,55 @@ from tic._infra.event_store_in_memory import EventStoreInMemory
 from tic.home.shell import HomeHttp
 from tic.savefile.list.document import SavefileLogEntry
 from tic.savefile.list.shell import SavefileListHttp, SavefileListListener
-from tic.savefile.process.core import ProcessSavefileHandler
+from tic.savefile.process.core import (
+    ProcessResult,
+    ProcessSavefile,
+    ProcessSavefileHandler,
+    SavefileState,
+)
 from tic.savefile.process.shell import SavefileProcess
+from tic.shared.command import CommandHandler
+from tic.shared.document_store import DocumentStore
+from tic.shared.event_store import EventStore
 from tic.shared.event_subscriber import EventSubscriber
 from tic.shared.http_module import HttpModule
 from tic.shared.message_bus import MessageBus
 
 
-class Container:
-    """Constructs and wires all application services."""
+def build_server(
+    host: str = "127.0.0.1", port: int = 8000
+) -> tuple[uvicorn.Server, MessageBus]:
+    """Build the wired application and return the uvicorn server and message bus."""
+    c = Container()
 
-    def __init__(self) -> None:
-        """Construct all services and apply static wiring."""
-        log_store: DocumentStoreInMemory[SavefileLogEntry] = DocumentStoreInMemory()
-        event_store = EventStoreInMemory()
-        process_savefile_handler = ProcessSavefileHandler()
-        self._bus = MessageBusInMemory()
-        self._app = FastAPI(title="Terra Invicta Companion")
+    # Infrastructure bindings
+    bus = MessageBusInMemory()
+    event_store = EventStoreInMemory()
+    log_store: DocumentStoreInMemory[SavefileLogEntry] = DocumentStoreInMemory()
 
-        modules: list[EventSubscriber | HttpModule] = [
-            HomeHttp(),
-            SavefileProcess(self._bus, event_store, process_savefile_handler),
-            SavefileListListener(log_store),
-            SavefileListHttp(log_store),
-        ]
+    c.define(MessageBus, lambda: bus)
+    c.define(EventStore, lambda: event_store)
+    c.define(DocumentStore[SavefileLogEntry], lambda: log_store)  # type: ignore[type-abstract]
+    c.define(
+        CommandHandler[ProcessSavefile, ProcessResult, SavefileState],  # type: ignore[type-abstract]
+        lambda: ProcessSavefileHandler(),
+    )
 
-        for module in modules:
-            if isinstance(module, EventSubscriber):
-                self._bus.subscribe(*module.subscriptions())
-            if isinstance(module, HttpModule):
-                self._app.include_router(module.router())
+    # Module resolution
+    modules: list[EventSubscriber | HttpModule] = [
+        c[HomeHttp],
+        c[SavefileProcess],
+        c[SavefileListListener],
+        c[SavefileListHttp],
+    ]
 
-    @property
-    def bus(self) -> MessageBus:
-        """The wired message bus."""
-        return self._bus
+    # Wiring
+    app = FastAPI(title="Terra Invicta Companion")
+    for module in modules:
+        if isinstance(module, EventSubscriber):
+            bus.subscribe(*module.subscriptions())
+        if isinstance(module, HttpModule):
+            app.include_router(module.router())
 
-    def uvicorn_server(
-        self, host: str = "127.0.0.1", port: int = 8000
-    ) -> uvicorn.Server:
-        """Build a uvicorn server wrapping the application."""
-        return uvicorn.Server(
-            uvicorn.Config(self._app, host=host, port=port, log_config=None)
-        )
+    server = uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_config=None))
+    return server, bus
