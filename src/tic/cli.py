@@ -29,7 +29,7 @@ def main() -> None:
         print(f"Configuration error: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, settings.app_dir)
 
     try:
         asyncio.run(_run(settings))

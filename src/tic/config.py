@@ -16,7 +16,7 @@ class ConfigurationError(Exception):
 class Settings:
     """Application settings."""
 
-    event_store_path: Path
+    app_dir: Path
     log_level: int
     port: int
     watch_dir: Path
@@ -25,18 +25,21 @@ class Settings:
     def load(cls) -> Settings:
         """Load settings from environment."""
         return cls(
-            event_store_path=_load_event_store_path(),
+            app_dir=_load_app_dir(),
             log_level=_load_log_level(),
             port=_load_port(),
             watch_dir=_load_watch_dir(),
         )
 
 
-def _load_event_store_path() -> Path:
-    raw = os.getenv("TIC_SAVE_PATH")
+def _load_app_dir() -> Path:
+    raw = os.getenv("TIC_APP_DIR")
     if not raw:
-        raise ConfigurationError("TIC_SAVE_PATH is required but not set.")
-    return Path(raw).expanduser()
+        raise ConfigurationError("TIC_APP_DIR is required but not set.")
+    path = Path(raw).expanduser()
+    if not path.is_dir():
+        raise ConfigurationError(f"TIC_APP_DIR={raw!r} is not a valid directory.")
+    return path
 
 
 def _load_log_level() -> int:

@@ -8,19 +8,17 @@ from pathlib import Path
 from uvicorn.logging import ColourizedFormatter, DefaultFormatter
 
 
-def configure(level: int) -> None:
+def configure(level: int, app_dir: Path) -> None:
     """Configure logging for the application.
 
     - tic.*: colourized console (INFO+), file (level)
     - uvicorn/uvicorn.error: restored uvicorn formatters, file (level)
     - uvicorn.access: silenced entirely
     """
-    log_file = Path.cwd() / "logs" / "tic.log"
+    log_file = app_dir / "tic.log"
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
-    plain_formatter = logging.Formatter(
-        "%(asctime)s %(levelname)s: %(message)s"
-    )
+    plain_formatter = logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
 
     def _file_handler() -> logging.FileHandler:
         h = logging.FileHandler(log_file, mode="a", encoding="utf-8")
