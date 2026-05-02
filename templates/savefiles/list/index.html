@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Savefile Processing Log — Terra Invicta Companion</title>
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -27,7 +28,7 @@
     .empty {
       color: #484f58;
       font-size: 0.875rem;
-      padding: 2rem 0;
+      padding: 2rem 0.75rem;
     }
 
     table {
@@ -98,69 +99,25 @@
 <body>
   <h1>Savefile Processing Log</h1>
 
-  {% if not entries %}
-    <p class="empty">No processing attempts recorded yet.</p>
-  {% else %}
-    <table>
-      <thead>
-        <tr>
-          <th>Status</th>
-          <th>Game date</th>
-          <th>Faction</th>
-          <th>Campaign start</th>
-          <th>Duration</th>
-          <th>Reason</th>
-          <th>Recorded at</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for entry in entries %}
-        <tr>
-          <td>
-            <span class="status status-{{ entry.status }}">{{ entry.status }}</span>
-          </td>
-          <td>
-            {% if entry.current_date_time %}
-              {{ entry.current_date_time.strftime("%Y-%m-%d %H:%M") }}
-            {% else %}
-              <span class="dim">—</span>
-            {% endif %}
-          </td>
-          <td>
-            {% if entry.player_faction is not none %}
-              {{ entry.player_faction }}
-            {% else %}
-              <span class="dim">—</span>
-            {% endif %}
-          </td>
-          <td>
-            {% if entry.real_world_campaign_start %}
-              {{ entry.real_world_campaign_start.strftime("%Y-%m-%d %H:%M") }}
-            {% else %}
-              <span class="dim">—</span>
-            {% endif %}
-          </td>
-          <td class="duration">
-            {% if entry.duration_ms is not none %}
-              {{ entry.duration_ms }} ms
-            {% else %}
-              <span class="dim">—</span>
-            {% endif %}
-          </td>
-          <td class="reason">
-            {% if entry.reason %}
-              {{ entry.reason }}
-            {% else %}
-              <span class="dim">—</span>
-            {% endif %}
-          </td>
-          <td class="dim">
-            {{ entry.recorded_at.strftime("%Y-%m-%d %H:%M:%S") }}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% endif %}
+  <table>
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th>Game date</th>
+        <th>Faction</th>
+        <th>Campaign start</th>
+        <th>Duration</th>
+        <th>Reason</th>
+        <th>Recorded at</th>
+      </tr>
+    </thead>
+    <tbody
+      hx-get="/savefiles/table"
+      hx-trigger="load, every 5s"
+      hx-swap="innerHTML"
+    >
+      {% include "savefiles/list/_table.html" %}
+    </tbody>
+  </table>
 </body>
 </html>

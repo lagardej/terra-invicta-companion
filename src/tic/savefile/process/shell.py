@@ -14,11 +14,11 @@ from tic.savefile.process._extract.identity import (
 )
 from tic.savefile.process._internal.validation_failure import ValidationFailure
 from tic.savefile.process.core import (
+    ProcessResult,
     ProcessSavefile,
-    ProcessSavefileHandler,
     SavefileState,
 )
-from tic.shared.command import CommandContext
+from tic.shared.command import CommandContext, CommandHandler
 from tic.shared.event_store import EventFilter, EventStore
 from tic.shared.event_subscriber import EventSubscriber, Subscription
 from tic.shared.events.base import DomainEvent, Message
@@ -27,21 +27,29 @@ from tic.shared.events.savefile import (
     SavefileProcessingFailed,
     SavefileProcessingSucceeded,
 )
+from tic.shared.log_call import log_call
 from tic.shared.message_bus import MessageBus
 
 
 class SavefileProcess(EventSubscriber):
     """Subscribes to savefile change events and drives processing."""
 
-    def __init__(self, bus: MessageBus, event_store: EventStore) -> None:
+    def __init__(
+        self,
+        bus: MessageBus,
+        event_store: EventStore,
+        handler: CommandHandler[ProcessSavefile, ProcessResult, SavefileState],
+    ) -> None:
         """Initialise with required infrastructure."""
         self._bus = bus
         self._event_store = event_store
+        self._handler = handler
 
     def subscriptions(self) -> tuple[Subscription, ...]:
         """Return subscription entries for this module."""
         return ((SavefileChangeDetected, self._on_savefile_detected),)
 
+    @log_call()
     async def _on_savefile_detected(self, event: Message) -> None:
         assert isinstance(event, SavefileChangeDetected)
         data = _load(event)
@@ -61,16 +69,15 @@ class SavefileProcess(EventSubscriber):
         event_filter = _event_filter(identity)
         context, expected_max_sequence = await self._load_context(event_filter)
 
-        handler = ProcessSavefileHandler()
-        result = await handler.handle(command, context)
+        result = await self._handler.handle(command, context)
 
         await self._event_store.append(
             event_filter,
             result.domain_event,
             expected_max_sequence=expected_max_sequence,
         )
-        if isinstance(result.domain_event, SavefileProcessingSucceeded):
-            await self._bus.publish(result.integration_events)
+
+        await self._bus.publish(result.domain_event, *result.integration_events)
 
     async def _persist_validation_failure(self, failure: ValidationFailure) -> None:
         failure_filter = EventFilter(event_types=(SavefileProcessingFailed.type(),))

@@ -11,6 +11,7 @@ from tic.shared.event_store import (
     QueryResult,
 )
 from tic.shared.events.base import DomainEvent
+from tic.shared.log_call import log_call
 
 
 class EventStoreInMemory(EventStore):
@@ -18,13 +19,14 @@ class EventStoreInMemory(EventStore):
 
     def __init__(self) -> None:
         """Initialise with an empty event log."""
-        self._log: list[DomainEvent] = []
+        self._streams: list[DomainEvent] = []
 
     async def query(self, filter: EventFilter) -> QueryResult:
         """Return all events matching filter and the current max sequence."""
-        matched = tuple(e for e in self._log if _matches(e, filter))
+        matched = tuple(e for e in self._streams if _matches(e, filter))
         return QueryResult(events=matched, max_sequence=len(matched))
 
+    @log_call(with_args=True)
     async def append(
         self,
         filter: EventFilter,
@@ -36,12 +38,12 @@ class EventStoreInMemory(EventStore):
         Raises ConcurrencyError if the number of matching events has grown
         since expected_max_sequence.
         """
-        current_sequence = sum(1 for e in self._log if _matches(e, filter))
+        current_sequence = sum(1 for e in self._streams if _matches(e, filter))
         if current_sequence != expected_max_sequence:
             raise ConcurrencyError(
                 f"Expected max sequence {expected_max_sequence}, got {current_sequence}"
             )
-        self._log.extend(events)
+        self._streams.extend(events)
 
 
 def _matches(event: DomainEvent, filter: EventFilter) -> bool:

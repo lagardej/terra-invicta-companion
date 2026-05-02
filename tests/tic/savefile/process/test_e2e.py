@@ -8,6 +8,7 @@ import pytest
 
 from tic._infra.bus_in_memory import MessageBusInMemory
 from tic._infra.event_store_in_memory import EventStoreInMemory
+from tic.savefile.process.core import ProcessSavefileHandler
 from tic.savefile.process.shell import SavefileProcess
 from tic.shared.events.campaign import CampaignDataExtracted
 from tic.shared.events.faction import FactionDataExtracted
@@ -32,7 +33,8 @@ def _events_of_type[EventT](
 def _runtime() -> tuple[MessageBusInMemory, EventStoreInMemory, SavefileProcess]:
     bus = MessageBusInMemory()
     event_store = EventStoreInMemory()
-    return bus, event_store, SavefileProcess(bus, event_store)
+    handler = ProcessSavefileHandler()
+    return bus, event_store, SavefileProcess(bus, event_store, handler)
 
 
 @pytest.fixture(scope="module")
@@ -50,8 +52,8 @@ class TestE2EAutosaveHappyPath:
 
         await process._on_savefile_detected(autosave_event)
 
-        assert len(event_store._log) == 1
-        event = event_store._log[0]
+        assert len(event_store._streams) == 1
+        event = event_store._streams[0]
         assert isinstance(event, SavefileProcessingSucceeded)
 
         assert event.real_world_campaign_start is not None
@@ -96,7 +98,7 @@ class TestE2EAutosaveFailures:
         await process._on_savefile_detected(autosave_event)
 
         failed = [
-            e for e in event_store._log if isinstance(e, SavefileProcessingFailed)
+            e for e in event_store._streams if isinstance(e, SavefileProcessingFailed)
         ]
         assert len(failed) == 1
         assert "already processed" in failed[0].reason.lower()
@@ -110,7 +112,7 @@ class TestE2EAutosaveFailures:
         await process._on_savefile_detected(SavefileChangeDetected(path=invalid_path))
 
         failed = [
-            e for e in event_store._log if isinstance(e, SavefileProcessingFailed)
+            e for e in event_store._streams if isinstance(e, SavefileProcessingFailed)
         ]
         assert len(failed) == 1
         assert failed[0].real_world_campaign_start is None

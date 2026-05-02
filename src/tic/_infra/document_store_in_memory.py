@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from tic.shared.document_store import DocumentStore
+from tic.shared.log_call import log_call
 
 
 class DocumentStoreInMemory[T](DocumentStore[T]):
@@ -20,6 +21,7 @@ class DocumentStoreInMemory[T](DocumentStore[T]):
         """Return the document for key, or None if absent."""
         return self._data.get(key)
 
+    @log_call(with_args=True)
     async def put(self, key: str, document: T) -> None:
         """Insert or replace the document at key."""
         self._data[key] = document

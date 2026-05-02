@@ -21,6 +21,7 @@ from tic.shared.events.savefile import (
     SavefileProcessingSucceeded,
 )
 from tic.shared.http_module import HttpModule
+from tic.shared.log_call import log_call
 
 _TEMPLATES_DIR = Path(__file__).parents[4] / "templates"
 
@@ -44,6 +45,7 @@ class SavefileListListener(EventSubscriber):
             cast(Subscription, (SavefileProcessingFailed, self._on_failed)),
         )
 
+    @log_call()
     async def _on_succeeded(
         self,
         event: SavefileProcessingSucceeded,
@@ -59,9 +61,9 @@ class SavefileListListener(EventSubscriber):
             duration_ms=event.duration_ms,
             recorded_at=self._now(),
         )
-
         await self._store.put(entry.id, entry)
 
+    @log_call()
     async def _on_failed(
         self,
         event: SavefileProcessingFailed,
@@ -103,10 +105,17 @@ class SavefileListHttp(HttpModule):
         @router.get("/savefiles/", response_class=HTMLResponse)
         async def list_savefiles(request: Request) -> HTMLResponse:
             entries = await self._store.all()
+            entries.sort(key=lambda e: e.recorded_at, reverse=True)
             return templates.TemplateResponse(
-                request,
-                "savefiles/index.html",
-                {"entries": entries},
+                request, "savefiles/list/index.html", {"entries": entries}
+            )
+
+        @router.get("/savefiles/table", response_class=HTMLResponse)
+        async def list_savefiles_table(request: Request) -> HTMLResponse:
+            entries = await self._store.all()
+            entries.sort(key=lambda e: e.recorded_at, reverse=True)
+            return templates.TemplateResponse(
+                request, "savefiles/list/_table.html", {"entries": entries}
             )
 
         return router

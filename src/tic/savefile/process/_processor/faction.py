@@ -12,11 +12,13 @@ from tic.savefile.process._internal.validated_input import validate_input
 from tic.savefile.process._internal.validation_failure import ValidationFailure
 from tic.shared.events.base import IntegrationEvent
 from tic.shared.events.faction import FactionDataExtracted, Resources
+from tic.shared.log_call import log_call
 
 _CONVERTER = cattr.Converter()
 _CONVERTER.register_structure_hook(tuple, lambda v, t: tuple(v))
 
 
+@log_call()
 def process_factions(
     data: dict, current_date_time: datetime
 ) -> Result[tuple[IntegrationEvent, ...], ValidationFailure]:

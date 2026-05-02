@@ -11,6 +11,7 @@ from tic._infra.event_store_in_memory import EventStoreInMemory
 from tic.home.shell import HomeHttp
 from tic.savefile.list.document import SavefileLogEntry
 from tic.savefile.list.shell import SavefileListHttp, SavefileListListener
+from tic.savefile.process.core import ProcessSavefileHandler
 from tic.savefile.process.shell import SavefileProcess
 from tic.shared.event_subscriber import EventSubscriber
 from tic.shared.http_module import HttpModule
@@ -24,12 +25,13 @@ class Container:
         """Construct all services and apply static wiring."""
         log_store: DocumentStoreInMemory[SavefileLogEntry] = DocumentStoreInMemory()
         event_store = EventStoreInMemory()
+        process_savefile_handler = ProcessSavefileHandler()
         self._bus = MessageBusInMemory()
         self._app = FastAPI(title="Terra Invicta Companion")
 
         modules: list[EventSubscriber | HttpModule] = [
             HomeHttp(),
-            SavefileProcess(self._bus, event_store),
+            SavefileProcess(self._bus, event_store, process_savefile_handler),
             SavefileListListener(log_store),
             SavefileListHttp(log_store),
         ]
@@ -49,4 +51,6 @@ class Container:
         self, host: str = "127.0.0.1", port: int = 8000
     ) -> uvicorn.Server:
         """Build a uvicorn server wrapping the application."""
-        return uvicorn.Server(uvicorn.Config(self._app, host=host, port=port))
+        return uvicorn.Server(
+            uvicorn.Config(self._app, host=host, port=port, log_config=None)
+        )

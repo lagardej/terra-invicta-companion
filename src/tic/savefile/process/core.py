@@ -20,6 +20,7 @@ from tic.shared.events.savefile import (
     SavefileProcessingFailed,
     SavefileProcessingSucceeded,
 )
+from tic.shared.log_call import log_call
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,7 @@ class ProcessSavefileHandler(
         process_factions,
     ]
 
+    @log_call()
     async def handle(
         self,
         command: ProcessSavefile,

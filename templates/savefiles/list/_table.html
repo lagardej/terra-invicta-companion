@@ -1,0 +1,51 @@
+        {% if not entries %}
+        <tr id="empty-row">
+          <td colspan="7" class="empty">No processing attempts recorded yet.</td>
+        </tr>
+        {% else %}
+        {% for entry in entries %}
+        <tr>
+          <td>
+            <span class="status status-{{ entry.status }}">{{ entry.status }}</span>
+          </td>
+          <td>
+            {% if entry.current_date_time %}
+              {{ entry.current_date_time.strftime("%Y-%m-%d %H:%M") }}
+            {% else %}
+              <span class="dim">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if entry.player_faction is not none %}
+              {{ entry.player_faction }}
+            {% else %}
+              <span class="dim">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if entry.real_world_campaign_start %}
+              {{ entry.real_world_campaign_start.strftime("%Y-%m-%d %H:%M") }}
+            {% else %}
+              <span class="dim">—</span>
+            {% endif %}
+          </td>
+          <td class="duration">
+            {% if entry.duration_ms is not none %}
+              {{ entry.duration_ms }} ms
+            {% else %}
+              <span class="dim">—</span>
+            {% endif %}
+          </td>
+          <td class="reason">
+            {% if entry.reason %}
+              {{ entry.reason }}
+            {% else %}
+              <span class="dim">—</span>
+            {% endif %}
+          </td>
+          <td class="dim">
+            {{ entry.recorded_at.strftime("%Y-%m-%d %H:%M:%S") }}
+          </td>
+        </tr>
+        {% endfor %}
+        {% endif %}
