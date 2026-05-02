@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from tic._infra.bus_in_memory import MessageBusInMemory
 from tic._infra.document_store_in_memory import DocumentStoreInMemory
 from tic._infra.event_store_in_memory import EventStoreInMemory
+from tic.home.shell import HomeHttp
 from tic.savefile.list.document import SavefileLogEntry
 from tic.savefile.list.shell import SavefileListHttp, SavefileListListener
 from tic.savefile.process.shell import SavefileProcess
@@ -27,6 +28,7 @@ class Container:
         self._app = FastAPI(title="Terra Invicta Companion")
 
         modules: list[EventSubscriber | HttpModule] = [
+            HomeHttp(),
             SavefileProcess(self._bus, event_store),
             SavefileListListener(log_store),
             SavefileListHttp(log_store),
