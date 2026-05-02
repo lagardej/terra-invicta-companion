@@ -8,7 +8,7 @@ import pytest
 
 from tic._infra.bus_in_memory import MessageBusInMemory
 from tic._infra.event_store_in_memory import EventStoreInMemory
-from tic.savefile.process.shell import on_savefile_detected
+from tic.savefile.process.shell import SavefileProcess
 from tic.shared.events.campaign import CampaignDataExtracted
 from tic.shared.events.faction import FactionDataExtracted
 from tic.shared.events.savefile import (
@@ -29,8 +29,10 @@ def _events_of_type[EventT](
     return [event for event in events if isinstance(event, event_type)]
 
 
-def _runtime() -> tuple[MessageBusInMemory, EventStoreInMemory]:
-    return MessageBusInMemory(), EventStoreInMemory()
+def _runtime() -> tuple[MessageBusInMemory, EventStoreInMemory, SavefileProcess]:
+    bus = MessageBusInMemory()
+    event_store = EventStoreInMemory()
+    return bus, event_store, SavefileProcess(bus, event_store)
 
 
 @pytest.fixture(scope="module")
@@ -44,15 +46,14 @@ class TestE2EAutosaveHappyPath:
         self,
         autosave_event: SavefileChangeDetected,
     ) -> None:
-        bus, event_store = _runtime()
+        bus, event_store, process = _runtime()
 
-        await on_savefile_detected(autosave_event, bus=bus, event_store=event_store)
+        await process._on_savefile_detected(autosave_event)
 
         assert len(event_store._log) == 1
         event = event_store._log[0]
         assert isinstance(event, SavefileProcessingSucceeded)
 
-        # Verify all fields are populated
         assert event.real_world_campaign_start is not None
         assert event.player_faction is not None
         assert event.current_date_time is not None
@@ -63,7 +64,7 @@ class TestE2EAutosaveHappyPath:
         self,
         autosave_event: SavefileChangeDetected,
     ) -> None:
-        bus, event_store = _runtime()
+        bus, event_store, process = _runtime()
         published_events: list[object] = []
 
         async def capture_event(event: object) -> None:
@@ -72,11 +73,10 @@ class TestE2EAutosaveHappyPath:
         bus.subscribe(CampaignDataExtracted, capture_event)
         bus.subscribe(FactionDataExtracted, capture_event)
 
-        await on_savefile_detected(autosave_event, bus=bus, event_store=event_store)
+        await process._on_savefile_detected(autosave_event)
 
         assert len(published_events) > 0
 
-        # Verify we extracted real data from the fixture
         campaign_events = _events_of_type(published_events, CampaignDataExtracted)
         faction_events = _events_of_type(published_events, FactionDataExtracted)
 
@@ -90,10 +90,10 @@ class TestE2EAutosaveFailures:
         self,
         autosave_event: SavefileChangeDetected,
     ) -> None:
-        bus, event_store = _runtime()
+        bus, event_store, process = _runtime()
 
-        await on_savefile_detected(autosave_event, bus=bus, event_store=event_store)
-        await on_savefile_detected(autosave_event, bus=bus, event_store=event_store)
+        await process._on_savefile_detected(autosave_event)
+        await process._on_savefile_detected(autosave_event)
 
         failed = [
             e for e in event_store._log if isinstance(e, SavefileProcessingFailed)
@@ -103,16 +103,11 @@ class TestE2EAutosaveFailures:
 
     @pytest.mark.asyncio
     async def test_invalid_savefile_raises(self, tmp_path: Path) -> None:
-        bus, event_store = _runtime()
+        bus, event_store, process = _runtime()
         invalid_path = tmp_path / "invalid-save.json"
         invalid_path.write_text("{}", encoding="utf-8")
-        invalid_event = SavefileChangeDetected(path=invalid_path)
 
-        await on_savefile_detected(
-            invalid_event,
-            bus=bus,
-            event_store=event_store,
-        )
+        await process._on_savefile_detected(SavefileChangeDetected(path=invalid_path))
 
         failed = [
             e for e in event_store._log if isinstance(e, SavefileProcessingFailed)
@@ -124,13 +119,10 @@ class TestE2EAutosaveFailures:
 
     @pytest.mark.asyncio
     async def test_missing_file_raises(self, tmp_path: Path) -> None:
-        bus, event_store = _runtime()
+        bus, event_store, process = _runtime()
         missing_path = tmp_path / "missing-save.json"
-        missing_event = SavefileChangeDetected(path=missing_path)
 
         with pytest.raises(FileNotFoundError):
-            await on_savefile_detected(
-                missing_event,
-                bus=bus,
-                event_store=event_store,
+            await process._on_savefile_detected(
+                SavefileChangeDetected(path=missing_path)
             )

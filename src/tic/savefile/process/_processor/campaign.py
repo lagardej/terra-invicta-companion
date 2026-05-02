@@ -6,8 +6,7 @@ from datetime import datetime
 
 import cattr
 from pydantic import AliasChoices, BaseModel, Field
-from returns.pipeline import is_successful
-from returns.result import Failure, Result, Success
+from returns.result import Failure, Result
 
 from tic.savefile.process._internal.epoch import to_datetime
 from tic.savefile.process._internal.validated_input import validate_input
@@ -23,19 +22,24 @@ def process_campaign(
     data: dict, current_date_time: datetime
 ) -> Result[tuple[IntegrationEvent, ...], ValidationFailure]:
     """Map raw savefile data to a campaign integration event."""
-    validated_result = validate_input(_CampaignInput, data)
-    if not is_successful(validated_result):
-        return Failure(validated_result.failure())
-    validated = validated_result.unwrap()
+    return (
+        validate_input(_CampaignInput, data)
+        .bind(_extract_campaign_values)
+        .map(lambda values: (_to_result(current_date_time, values[0], values[1]),))
+    )
 
+
+def _extract_campaign_values(
+    validated: _CampaignInput,
+) -> Result[tuple[_GlobalValuesValue, _TimeValue], ValidationFailure]:
     global_values = validated.gamestates.global_values_state[0].value
     time_state = validated.gamestates.time_state[0].value
-    if not isinstance(global_values, _GlobalValuesValue) or not isinstance(
+    if isinstance(global_values, _GlobalValuesValue) and isinstance(
         time_state, _TimeValue
     ):
-        return Failure(ValidationFailure(reason="invalid campaign input"))
+        return Result.from_value((global_values, time_state))
 
-    return Success((_to_result(current_date_time, global_values, time_state),))
+    return Failure(ValidationFailure(reason="invalid campaign input"))
 
 
 def _to_result(

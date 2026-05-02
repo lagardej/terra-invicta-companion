@@ -6,8 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from pydantic import AliasChoices, BaseModel, Field
-from returns.pipeline import is_successful
-from returns.result import Failure, Result, Success
+from returns.result import Failure, Result
 
 from tic.savefile.process._internal.epoch import to_datetime
 from tic.savefile.process._internal.validated_input import validate_input
@@ -26,11 +25,26 @@ def extract_identity_and_current_date_time(
     data: dict,
 ) -> Result[tuple[Identity, datetime], ValidationFailure]:
     """Extract identity fields and current_date_time from raw savefile data."""
-    validated_result = validate_input(_IdentityInput, data)
-    if not is_successful(validated_result):
-        return Failure(validated_result.failure())
-    validated = validated_result.unwrap()
+    return (
+        validate_input(_IdentityInput, data)
+        .bind(_extract_identity_inputs)
+        .map(
+            lambda values: (
+                Identity(
+                    real_world_campaign_start=to_datetime(
+                        values[1].real_world_campaign_start
+                    ),
+                    player_faction=values[0].faction.value,
+                ),
+                to_datetime(values[2].current_date_time),
+            )
+        )
+    )
 
+
+def _extract_identity_inputs(
+    validated: _IdentityInput,
+) -> Result[tuple[_PlayerValue, _GlobalValuesValue, _TimeValue], ValidationFailure]:
     player_value = next(
         (
             item.value
@@ -46,24 +60,12 @@ def extract_identity_and_current_date_time(
 
     global_values = validated.gamestates.global_values_state[0].value
     time_state = validated.gamestates.time_state[0].value
-
-    if not isinstance(global_values, _GlobalValuesValue) or not isinstance(
+    if isinstance(global_values, _GlobalValuesValue) and isinstance(
         time_state, _TimeValue
     ):
-        return Failure(ValidationFailure(reason="invalid identity input"))
+        return Result.from_value((player_value, global_values, time_state))
 
-    real_world_campaign_start = to_datetime(global_values.real_world_campaign_start)
-    current_date_time = to_datetime(time_state.current_date_time)
-
-    return Success(
-        (
-            Identity(
-                real_world_campaign_start=real_world_campaign_start,
-                player_faction=player_value.faction.value,
-            ),
-            current_date_time,
-        )
-    )
+    return Failure(ValidationFailure(reason="invalid identity input"))
 
 
 class _CurrentId(BaseModel):

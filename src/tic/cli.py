@@ -10,7 +10,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from watchfiles import awatch
 
-from tic._config import message_bus, uvicorn_server
+from tic._config import Container
 from tic.config import ConfigurationError, Settings
 from tic.shared.events.savefile import SavefileChangeDetected
 from tic.shared.message_bus import MessageBus
@@ -35,10 +35,10 @@ def main() -> None:
 
 
 async def _run(settings: Settings) -> None:
-    server = uvicorn_server(port=settings.port)
+    container = Container()
     await asyncio.gather(
-        server.serve(),
-        _watch(settings.watch_dir, message_bus()),
+        container.uvicorn_server(port=settings.port).serve(),
+        _watch(settings.watch_dir, container.bus),
     )
 
 

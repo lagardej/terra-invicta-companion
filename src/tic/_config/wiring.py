@@ -1,29 +1,50 @@
-"""FastAPI application instance."""
+"""Dependency injection container — owns construction and wiring of all services."""
 
 from __future__ import annotations
-
-from functools import partial
 
 import uvicorn
 from fastapi import FastAPI
 
 from tic._infra.bus_in_memory import MessageBusInMemory
-from tic.savefile.process.shell import subscriptions as savefile_subscriptions
+from tic._infra.document_store_in_memory import DocumentStoreInMemory
+from tic._infra.event_store_in_memory import EventStoreInMemory
+from tic.savefile.list.document import SavefileLogEntry
+from tic.savefile.list.shell import SavefileListHttp, SavefileListListener
+from tic.savefile.process.shell import SavefileProcess
+from tic.shared.event_subscriber import EventSubscriber
+from tic.shared.http_module import HttpModule
 from tic.shared.message_bus import MessageBus
 
 
-def message_bus() -> MessageBus:
-    bus = MessageBusInMemory()
+class Container:
+    """Constructs and wires all application services."""
 
-    for event_type, handler in savefile_subscriptions():
-        bus.subscribe(event_type, partial(handler, bus=bus))
+    def __init__(self) -> None:
+        """Construct all services and apply static wiring."""
+        log_store: DocumentStoreInMemory[SavefileLogEntry] = DocumentStoreInMemory()
+        event_store = EventStoreInMemory()
+        self._bus = MessageBusInMemory()
+        self._app = FastAPI(title="Terra Invicta Companion")
 
-    return bus
+        modules: list[EventSubscriber | HttpModule] = [
+            SavefileProcess(self._bus, event_store),
+            SavefileListListener(log_store),
+            SavefileListHttp(log_store),
+        ]
 
+        for module in modules:
+            if isinstance(module, EventSubscriber):
+                self._bus.subscribe(*module.subscriptions())
+            if isinstance(module, HttpModule):
+                self._app.include_router(module.router())
 
-def uvicorn_server(host: str = "127.0.0.1", port: int = 8000) -> uvicorn.Server:
-    return uvicorn.Server(uvicorn.Config(_web_app(), host=host, port=port))
+    @property
+    def bus(self) -> MessageBus:
+        """The wired message bus."""
+        return self._bus
 
-
-def _web_app() -> FastAPI:
-    return FastAPI(title="Terra Invicta Companion")
+    def uvicorn_server(
+        self, host: str = "127.0.0.1", port: int = 8000
+    ) -> uvicorn.Server:
+        """Build a uvicorn server wrapping the application."""
+        return uvicorn.Server(uvicorn.Config(self._app, host=host, port=port))

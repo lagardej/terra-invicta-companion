@@ -6,8 +6,7 @@ from datetime import datetime
 
 import cattr
 from pydantic import AliasChoices, BaseModel, Field
-from returns.pipeline import is_successful
-from returns.result import Failure, Result, Success
+from returns.result import Failure, Result
 
 from tic.savefile.process._internal.validated_input import validate_input
 from tic.savefile.process._internal.validation_failure import ValidationFailure
@@ -22,15 +21,25 @@ def process_factions(
     data: dict, current_date_time: datetime
 ) -> Result[tuple[IntegrationEvent, ...], ValidationFailure]:
     """Map raw savefile data to faction integration events."""
-    validated_result = validate_input(_FactionInput, data)
-    if not is_successful(validated_result):
-        return Failure(validated_result.failure())
-    validated = validated_result.unwrap()
+    return (
+        validate_input(_FactionInput, data)
+        .bind(_to_faction_player_pairs)
+        .map(
+            lambda pairs: tuple(
+                _to_event(current_date_time, faction, player)
+                for faction, player in pairs
+            )
+        )
+    )
 
+
+def _to_faction_player_pairs(
+    validated: _FactionInput,
+) -> Result[tuple[tuple[_FactionValue, _PlayerValue], ...], ValidationFailure]:
     player_by_id = {
         item.value.id.value: item.value for item in validated.gamestates.player_state
     }
-    events: list[FactionDataExtracted] = []
+    pairs: list[tuple[_FactionValue, _PlayerValue]] = []
     for item in validated.gamestates.faction_state:
         faction = item.value
         player = player_by_id.get(faction.player.value)
@@ -41,9 +50,9 @@ def process_factions(
                 )
             )
 
-        events.append(_to_event(current_date_time, faction, player))
+        pairs.append((faction, player))
 
-    return Success(tuple(events))
+    return Result.from_value(tuple(pairs))
 
 
 def _to_event(

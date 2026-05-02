@@ -15,8 +15,8 @@ class MessageBusInMemory(MessageBus):
         """Initialise with an empty handler registry."""
         self._handlers: dict[str, list[Handler]] = defaultdict(list)
 
-    def subscribe(self, event_class: type[Message], handler: Handler) -> None:
-        """Register a handler for a message type."""
+    def _subscribe(self, event_class: type[Message], handler: Handler) -> None:
+        """Register a single handler for a message type."""
         self._handlers[event_class.type()].append(handler)
 
     async def _publish(self, event: Message) -> None:

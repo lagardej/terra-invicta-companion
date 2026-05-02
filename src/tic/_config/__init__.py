@@ -1,5 +1,5 @@
-"""Configuration package for application-wide singletons."""
+"""Configuration package — application dependency injection container."""
 
-from .wiring import message_bus, uvicorn_server
+from .wiring import Container
 
-__all__ = ["message_bus", "uvicorn_server"]
+__all__ = ["Container"]

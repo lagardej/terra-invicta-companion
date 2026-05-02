@@ -2,19 +2,25 @@
 
 from __future__ import annotations
 
-
-class Message:
-    """Common base for all bus messages. Subclasses declare their type string."""
-
-    @classmethod
-    def type(cls) -> str:
-        """Return the unique string identifier for this message type."""
-        raise NotImplementedError
+from abc import ABC, abstractmethod
 
 
-class DomainEvent(Message):
+class DomainEvent(ABC):
     """Base for domain events emitted by the functional core."""
 
+    @classmethod
+    @abstractmethod
+    def type(cls) -> str:
+        """Return the unique string identifier for this message type."""
 
-class IntegrationEvent(Message):
+
+class IntegrationEvent(ABC):
     """Base for integration events that cross module boundaries."""
+
+    @classmethod
+    @abstractmethod
+    def type(cls) -> str:
+        """Return the unique string identifier for this message type."""
+
+
+Message = DomainEvent | IntegrationEvent

@@ -4,43 +4,47 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Sequence
-from typing import overload
+from typing import cast, overload
 
 from tic.shared.events.base import Message
 
 Handler = Callable[[Message], Awaitable[None]]
+Subscription = tuple[type[Message], Handler]
 
 
 class MessageBus(ABC):
     """Abstract base for message buses."""
 
-    @abstractmethod
-    def subscribe(self, event_class: type[Message], handler: Handler) -> None:
-        """Register a handler for a message type."""
+    def subscribe(
+        self,
+        *args: type[Message] | Handler | Subscription,
+    ) -> None:
+        """Register one or more (event_type, handler) subscriptions.
+
+        Accepts either:
+        - ``bus.subscribe(EventType, handler)`` — flat two-arg form
+        - ``bus.subscribe((EventType, handler), ...)`` — tuple form
+        """
+        if len(args) == 2 and isinstance(args[0], type) and callable(args[1]):
+            self._subscribe(args[0], cast(Handler, args[1]))
+        else:
+            for subscription in args:
+                self._subscribe(*cast(Subscription, subscription))
 
     @abstractmethod
-    async def _publish(self, event: Message) -> None:
-        """Publish an event to subscribers."""
+    def _subscribe(self, event_class: type[Message], handler: Handler) -> None:
+        """Register a single handler for a message type."""
 
     @overload
-    async def publish(
-        self, event: Message
-    ) -> None:  # pragma: no cover - typing overload
-        ...
+    async def publish(self, event: Message) -> None: ...
 
     @overload
-    async def publish(
-        self, *events: Message
-    ) -> None:  # pragma: no cover - typing overload
-        ...
+    async def publish(self, *events: Message) -> None: ...
 
     @overload
-    async def publish(
-        self, events: Sequence[Message]
-    ) -> None:  # pragma: no cover - typing overload
-        ...
+    async def publish(self, events: Sequence[Message]) -> None: ...
 
-    async def publish(self, *events):  # type: ignore[override]
+    async def publish(self, *events) -> None:  # type: ignore[override]
         """Publish one or more events.
 
         Usage:
@@ -56,3 +60,7 @@ class MessageBus(ABC):
 
         for event in events:
             await self._publish(event)
+
+    @abstractmethod
+    async def _publish(self, event: Message) -> None:
+        """Publish an event to subscribers."""
