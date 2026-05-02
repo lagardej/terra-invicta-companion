@@ -9,6 +9,8 @@ from lagom import Container
 from tic._infra.bus_in_memory import MessageBusInMemory
 from tic._infra.document_store_in_memory import DocumentStoreInMemory
 from tic._infra.event_store_in_memory import EventStoreInMemory
+from tic.faction.update.core import FactionState, UpdateFaction, UpdateFactionHandler
+from tic.faction.update.shell import FactionUpdateListener
 from tic.home.shell import HomeHttp
 from tic.savefile.list.document import SavefileLogEntry
 from tic.savefile.list.shell import SavefileListHttp, SavefileListListener
@@ -23,6 +25,7 @@ from tic.shared.command import CommandHandler
 from tic.shared.document_store import DocumentStore
 from tic.shared.event_store import EventStore
 from tic.shared.event_subscriber import EventSubscriber
+from tic.shared.events.faction import FactionUpdated
 from tic.shared.http_module import HttpModule
 from tic.shared.message_bus import MessageBus
 
@@ -45,6 +48,10 @@ def build_server(
         CommandHandler[ProcessSavefile, ProcessResult, SavefileState],  # type: ignore[type-abstract]
         lambda: ProcessSavefileHandler(),
     )
+    c.define(
+        CommandHandler[UpdateFaction, FactionUpdated, FactionState],  # type: ignore[type-abstract]
+        lambda: UpdateFactionHandler(),
+    )
 
     # Module resolution
     modules: list[EventSubscriber | HttpModule] = [
@@ -52,6 +59,7 @@ def build_server(
         c[SavefileProcess],
         c[SavefileListListener],
         c[SavefileListHttp],
+        c[FactionUpdateListener],
     ]
 
     # Wiring

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from tic.shared.events.base import IntegrationEvent
+from tic.shared.events.base import DomainEvent, IntegrationEvent
 
 
 @dataclass(frozen=True)
@@ -26,6 +26,28 @@ class FactionDataExtracted(IntegrationEvent):
     def type(cls) -> str:
         """Return the unique string identifier for this message type."""
         return "faction.data_extracted"
+
+
+@dataclass(frozen=True)
+class FactionUpdated(DomainEvent):
+    """Emitted when faction data was updated from a savefile."""
+
+    id: int
+    abductions: int
+    armies: tuple[int, ...]
+    atrocities: int
+    councilors: tuple[int, ...]
+    current_date_time: datetime
+    fleets: tuple[int, ...]
+    is_ai: bool
+    mission_control_usage: int
+    template_name: str
+    resources: Resources
+
+    @classmethod
+    def type(cls) -> str:
+        """Return the unique string identifier for this message type."""
+        return "faction.data_updated"
 
 
 @dataclass(frozen=True)

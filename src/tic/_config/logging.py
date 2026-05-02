@@ -41,7 +41,10 @@ def configure(level: int, app_dir: Path) -> None:
     # uvicorn.*
     uvicorn_configs: list[tuple[str, logging.Formatter]] = [
         ("uvicorn", DefaultFormatter("%(levelprefix)s %(message)s", use_colors=True)),
-        ("uvicorn.error", DefaultFormatter("%(levelprefix)s %(message)s", use_colors=True)),
+        (
+            "uvicorn.error",
+            DefaultFormatter("%(levelprefix)s %(message)s", use_colors=True),
+        ),
     ]
     for name, formatter in uvicorn_configs:
         stream = logging.StreamHandler()
