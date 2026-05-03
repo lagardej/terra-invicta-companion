@@ -8,7 +8,7 @@ from pathlib import Path
 from uvicorn.logging import ColourizedFormatter, DefaultFormatter
 
 
-def configure(level: int, app_dir: Path) -> None:
+def configure(level: str, app_dir: Path) -> None:
     """Configure logging for the application.
 
     - tic.*: colourized console (INFO+), file (level)

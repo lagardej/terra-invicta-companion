@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from tic.shared.application import Settings as BaseSettings
+from tic.shared.application import AppSettings
 
 
 class ConfigurationError(Exception):
@@ -15,20 +14,22 @@ class ConfigurationError(Exception):
 
 
 @dataclass(frozen=True)
-class Settings(BaseSettings):
+class TicSettings(AppSettings):
     """Application settings."""
 
     app_dir: Path
-    log_level: int
+    env: str
+    log_level: str
     port: int
     watch_dir: Path
 
     @classmethod
-    def load(cls) -> Settings:
+    def load(cls) -> TicSettings:
         """Load settings from environment."""
         return cls(
             app_dir=_load_app_dir(),
-            log_level=_load_log_level(),
+            env=_load_env(),
+            log_level=os.getenv("TIC_LOG_LEVEL", "INFO").upper(),
             port=_load_port(),
             watch_dir=_load_watch_dir(),
         )
@@ -44,15 +45,8 @@ def _load_app_dir() -> Path:
     return path
 
 
-def _load_log_level() -> int:
-    raw = os.getenv("TIC_LOG_LEVEL", "INFO").upper()
-    level = logging.getLevelName(raw)
-    if not isinstance(level, int):
-        raise ConfigurationError(
-            f"TIC_LOG_LEVEL={raw!r} is not a valid log level. "
-            "Use DEBUG, INFO, WARNING, ERROR, or CRITICAL."
-        )
-    return level
+def _load_env() -> str:
+    return os.getenv("TIC_ENV", "dev").lower()
 
 
 def _load_port() -> int:

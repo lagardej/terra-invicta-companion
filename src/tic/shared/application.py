@@ -5,17 +5,17 @@ from abc import ABC, abstractmethod
 from lagom import ExplicitContainer
 
 
-class Settings(ABC):
+class AppSettings(ABC):
     """Base class for application settings."""
 
     @classmethod
     @abstractmethod
-    def load(cls) -> Settings:
+    def load(cls) -> AppSettings:
         """Load settings from the environment."""
         ...
 
 
-class Application[S: Settings]:
+class Application[S: AppSettings]:
     """Wired application — wraps the lagom container and exposes typed helpers.
 
     Immutable after construction.
@@ -38,4 +38,4 @@ class Application[S: Settings]:
 
     def resolve[T](self, type_: type[T]) -> T:
         """Resolve a type from the container."""
-        return self._container[type_]  # type: ignore[return-value]
+        return self._container[type_]
