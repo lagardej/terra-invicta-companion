@@ -7,13 +7,15 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from tic.shared.application import Settings as BaseSettings
+
 
 class ConfigurationError(Exception):
     """Raised when required configuration is missing or invalid."""
 
 
 @dataclass(frozen=True)
-class Settings:
+class Settings(BaseSettings):
     """Application settings."""
 
     app_dir: Path

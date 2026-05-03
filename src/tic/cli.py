@@ -9,7 +9,8 @@ from pathlib import Path
 import uvicorn
 from watchfiles import Change, awatch
 
-from tic._config import Application, boot
+from tic._config import boot
+from tic.shared.application import Application
 from tic.shared.events.savefile import SavefileChangeDetected
 from tic.shared.message_bus import MessageBus
 
