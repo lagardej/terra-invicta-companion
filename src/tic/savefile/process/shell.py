@@ -13,19 +13,26 @@ from tic.savefile.process._extract.identity import (
     extract_identity_and_current_date_time,
 )
 from tic.savefile.process._internal.validation_failure import ValidationFailure
+from tic.savefile.process._processor.campaign import ExtractedCampaignData
+from tic.savefile.process._processor.faction import ExtractedFactionData
 from tic.savefile.process.core import (
+    ExtractedData,
     ProcessResult,
     ProcessSavefile,
     SavefileState,
 )
+from tic.savefile.process.events import (
+    SavefileProcessingFailed,
+    SavefileProcessingSucceeded,
+)
 from tic.shared.command import CommandContext, CommandHandler
 from tic.shared.event_store import EventFilter, EventStore
 from tic.shared.event_subscriber import EventSubscriber, Subscription
-from tic.shared.events.base import DomainEvent, Message
+from tic.shared.events.base import DomainEvent, IntegrationEvent, Message
+from tic.shared.events.campaign import CampaignDataExtracted
+from tic.shared.events.faction import FactionDataExtracted
 from tic.shared.events.savefile import (
     SavefileChangeDetected,
-    SavefileProcessingFailed,
-    SavefileProcessingSucceeded,
 )
 from tic.shared.log_call import log_call
 from tic.shared.message_bus import MessageBus
@@ -77,7 +84,8 @@ class SavefileProcess(EventSubscriber):
             expected_max_sequence=expected_max_sequence,
         )
 
-        await self._bus.publish(result.domain_event, *result.integration_events)
+        integration_events = _to_integration_events(result.extracted)
+        await self._bus.publish(result.domain_event, *integration_events)
 
     async def _persist_validation_failure(self, failure: ValidationFailure) -> None:
         failure_filter = EventFilter(event_types=(SavefileProcessingFailed.type(),))
@@ -94,6 +102,45 @@ class SavefileProcess(EventSubscriber):
         query_result = await self._event_store.query(scoped_filter)
         state = _fold_state(query_result.events)
         return CommandContext(state=state), query_result.max_sequence
+
+
+def _to_integration_events(
+    extracted: Sequence[ExtractedData],
+) -> tuple[IntegrationEvent, ...]:
+    events: list[IntegrationEvent] = []
+    for item in extracted:
+        if isinstance(item, ExtractedCampaignData):
+            events.append(
+                CampaignDataExtracted(
+                    campaign_start_version=item.campaign_start_version,
+                    current_date_time=item.current_date_time,
+                    current_quarter_since_start=item.current_quarter_since_start,
+                    days_in_campaign=item.days_in_campaign,
+                    difficulty=item.difficulty,
+                    latest_save_version=item.latest_save_version,
+                    real_world_campaign_start=item.real_world_campaign_start,
+                    scenario_customizations=item.scenario_customizations,
+                    start_difficulty=item.start_difficulty,
+                    template_name=item.template_name,
+                )
+            )
+        elif isinstance(item, ExtractedFactionData):
+            events.append(
+                FactionDataExtracted(
+                    id=item.id,
+                    abductions=item.abductions,
+                    armies=item.armies,
+                    atrocities=item.atrocities,
+                    councilors=item.councilors,
+                    current_date_time=item.current_date_time,
+                    fleets=item.fleets,
+                    is_ai=item.is_ai,
+                    mission_control_usage=item.mission_control_usage,
+                    template_name=item.template_name,
+                    resources=item.resources,
+                )
+            )
+    return tuple(events)
 
 
 def _event_filter(identity: Identity) -> EventFilter:

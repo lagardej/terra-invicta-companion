@@ -13,11 +13,11 @@ from tic.savefile.process.core import (
     ProcessSavefileHandler,
     SavefileState,
 )
-from tic.shared.command import CommandContext
-from tic.shared.events.savefile import (
+from tic.savefile.process.events import (
     SavefileProcessingFailed,
     SavefileProcessingSucceeded,
 )
+from tic.shared.command import CommandContext
 
 from .conftest import valid_savefile_data
 
@@ -68,12 +68,12 @@ class TestHandleHappyPath:
         assert isinstance(result.domain_event, SavefileProcessingSucceeded)
 
     @pytest.mark.asyncio
-    async def test_integration_events_collected(self) -> None:
+    async def test_extracted_data_collected(self) -> None:
         result = await _handle(_command(), _context())
 
         assert isinstance(result, ProcessResult)
         assert isinstance(result.domain_event, SavefileProcessingSucceeded)
-        assert len(result.integration_events) > 0
+        assert len(result.extracted) > 0
 
 
 class TestHandleContext:

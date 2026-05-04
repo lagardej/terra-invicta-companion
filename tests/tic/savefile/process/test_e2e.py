@@ -9,13 +9,15 @@ import pytest
 from tic._infra.bus_in_memory import MessageBusInMemory
 from tic._infra.event_store_in_memory import EventStoreInMemory
 from tic.savefile.process.core import ProcessSavefileHandler
+from tic.savefile.process.events import (
+    SavefileProcessingFailed,
+    SavefileProcessingSucceeded,
+)
 from tic.savefile.process.shell import SavefileProcess
 from tic.shared.events.campaign import CampaignDataExtracted
 from tic.shared.events.faction import FactionDataExtracted
 from tic.shared.events.savefile import (
     SavefileChangeDetected,
-    SavefileProcessingFailed,
-    SavefileProcessingSucceeded,
 )
 
 pytestmark = pytest.mark.e2e

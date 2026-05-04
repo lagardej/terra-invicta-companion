@@ -5,9 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from tic.faction.update.events import FactionUpdated
 from tic.shared.command import CommandContext, CommandHandler
-from tic.shared.events.faction import FactionUpdated, Resources
 from tic.shared.log_call import log_call
+from tic.shared.models import Resources
 
 
 @dataclass(frozen=True)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 
 import cattr
@@ -10,25 +11,41 @@ from returns.result import Failure, Result
 
 from tic.savefile.process._internal.validated_input import validate_input
 from tic.savefile.process._internal.validation_failure import ValidationFailure
-from tic.shared.events.base import IntegrationEvent
-from tic.shared.events.faction import FactionDataExtracted, Resources
 from tic.shared.log_call import log_call
+from tic.shared.models import Resources
 
 _CONVERTER = cattr.Converter()
 _CONVERTER.register_structure_hook(tuple, lambda v, t: tuple(v))
 
 
+@dataclass(frozen=True)
+class ExtractedFactionData:
+    """Raw faction data extracted from a savefile."""
+
+    id: int
+    abductions: int
+    armies: tuple[int, ...]
+    atrocities: int
+    councilors: tuple[int, ...]
+    current_date_time: datetime
+    fleets: tuple[int, ...]
+    is_ai: bool
+    mission_control_usage: int
+    template_name: str
+    resources: Resources
+
+
 @log_call()
 def process_factions(
     data: dict, current_date_time: datetime
-) -> Result[tuple[IntegrationEvent, ...], ValidationFailure]:
-    """Map raw savefile data to faction integration events."""
+) -> Result[tuple[ExtractedFactionData, ...], ValidationFailure]:
+    """Map raw savefile data to extracted faction data."""
     return (
         validate_input(_FactionInput, data)
         .bind(_to_faction_player_pairs)
         .map(
             lambda pairs: tuple(
-                _to_event(current_date_time, faction, player)
+                _to_extracted(current_date_time, faction, player)
                 for faction, player in pairs
             )
         )
@@ -57,14 +74,14 @@ def _to_faction_player_pairs(
     return Result.from_value(tuple(pairs))
 
 
-def _to_event(
+def _to_extracted(
     current_date_time: datetime,
     faction: _FactionValue,
     player: _PlayerValue,
-) -> FactionDataExtracted:
+) -> ExtractedFactionData:
     resources = _CONVERTER.structure(faction.resources.model_dump(), Resources)
 
-    return FactionDataExtracted(
+    return ExtractedFactionData(
         id=faction.id.value,
         abductions=faction.abductions,
         armies=tuple(current_id.value for current_id in faction.armies),

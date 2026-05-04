@@ -1,15 +1,15 @@
-"""Events related to factions."""
+"""Domain events for faction updates."""
 
 from dataclasses import dataclass
 from datetime import datetime
 
-from tic.shared.events.base import IntegrationEvent
+from tic.shared.events.base import DomainEvent
 from tic.shared.models import Resources
 
 
 @dataclass(frozen=True)
-class FactionDataExtracted(IntegrationEvent):
-    """Emitted when faction data was extracted from a savefile."""
+class FactionUpdated(DomainEvent):
+    """Emitted when faction data was updated from a savefile."""
 
     id: int
     abductions: int
@@ -22,3 +22,8 @@ class FactionDataExtracted(IntegrationEvent):
     mission_control_usage: int
     template_name: str
     resources: Resources
+
+    @classmethod
+    def type(cls) -> str:
+        """Return the unique string identifier for this message type."""
+        return "faction.data_updated"

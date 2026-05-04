@@ -16,10 +16,6 @@ pytestmark = pytest.mark.unit
 class _SaveDetected(IntegrationEvent):
     path: str
 
-    @classmethod
-    def type(cls) -> str:
-        return "savefile.detected"
-
 
 @dataclass(frozen=True)
 class _ImportSucceeded(DomainEvent):

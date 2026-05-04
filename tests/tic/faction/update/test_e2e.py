@@ -9,8 +9,10 @@ import pytest
 from tic._infra.bus_in_memory import MessageBusInMemory
 from tic._infra.event_store_in_memory import EventStoreInMemory
 from tic.faction.update.core import UpdateFactionHandler
+from tic.faction.update.events import FactionUpdated
 from tic.faction.update.shell import FactionUpdateListener
-from tic.shared.events.faction import FactionDataExtracted, FactionUpdated, Resources
+from tic.shared.events.faction import FactionDataExtracted
+from tic.shared.models import Resources
 
 pytestmark = pytest.mark.e2e
 

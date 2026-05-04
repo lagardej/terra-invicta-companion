@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from tic.faction.update.core import FactionState, UpdateFaction
+from tic.faction.update.events import FactionUpdated
 from tic.shared.command import CommandContext, CommandHandler
 from tic.shared.event_store import EventFilter, EventStore
 from tic.shared.event_subscriber import EventSubscriber, Subscription
 from tic.shared.events.base import DomainEvent, Message
-from tic.shared.events.faction import FactionDataExtracted, FactionUpdated
+from tic.shared.events.faction import FactionDataExtracted
 from tic.shared.log_call import log_call
 from tic.shared.message_bus import MessageBus
 

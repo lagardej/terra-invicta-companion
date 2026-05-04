@@ -12,15 +12,22 @@ from returns.result import Result
 
 from tic.savefile.process._extract.identity import Identity
 from tic.savefile.process._internal.validation_failure import ValidationFailure
-from tic.savefile.process._processor.campaign import process_campaign
-from tic.savefile.process._processor.faction import process_factions
-from tic.shared.command import CommandContext, CommandHandler
-from tic.shared.events.base import IntegrationEvent
-from tic.shared.events.savefile import (
+from tic.savefile.process._processor.campaign import (
+    ExtractedCampaignData,
+    process_campaign,
+)
+from tic.savefile.process._processor.faction import (
+    ExtractedFactionData,
+    process_factions,
+)
+from tic.savefile.process.events import (
     SavefileProcessingFailed,
     SavefileProcessingSucceeded,
 )
+from tic.shared.command import CommandContext, CommandHandler
 from tic.shared.log_call import log_call
+
+ExtractedData = ExtractedCampaignData | ExtractedFactionData
 
 
 @dataclass(frozen=True)
@@ -37,7 +44,7 @@ class ProcessResult:
     """Result of savefile processing for the imperative shell."""
 
     domain_event: SavefileProcessingSucceeded | SavefileProcessingFailed
-    integration_events: tuple[IntegrationEvent, ...]
+    extracted: tuple[ExtractedData, ...]
 
 
 @dataclass(frozen=True)
@@ -48,7 +55,7 @@ class SavefileState:
 
 
 type _Processor = Callable[
-    [dict, datetime], Result[tuple[IntegrationEvent, ...], ValidationFailure]
+    [dict, datetime], Result[tuple[ExtractedData, ...], ValidationFailure]
 ]
 
 
@@ -75,34 +82,32 @@ class ProcessSavefileHandler(
         if _is_already_processed(current_date_time, context.state):
             return _already_processed(identity, current_date_time)
 
-        integration_events, failures, elapsed_ms = self._run_processors(
+        extracted, failures, elapsed_ms = self._run_processors(
             command.data, current_date_time
         )
         if failures:
             return _processor_failures_result(identity, current_date_time, failures)
 
-        return _success_result(
-            identity, current_date_time, integration_events, elapsed_ms
-        )
+        return _success_result(identity, current_date_time, extracted, elapsed_ms)
 
     def _run_processors(
         self,
         data: dict,
         current_date_time: datetime,
-    ) -> tuple[tuple[IntegrationEvent, ...], list[str], int]:
+    ) -> tuple[tuple[ExtractedData, ...], list[str], int]:
         t0 = time.perf_counter()
 
-        integration_events: list[IntegrationEvent] = []
+        extracted: list[ExtractedData] = []
         failures: list[str] = []
         for processor in self.processors:
             result = processor(data, current_date_time)
             if not is_successful(result):
                 failures.append(result.failure().reason)
                 continue
-            integration_events.extend(result.unwrap())
+            extracted.extend(result.unwrap())
 
         elapsed_ms = int(round((time.perf_counter() - t0) * 1000))
-        return tuple(integration_events), failures, elapsed_ms
+        return tuple(extracted), failures, elapsed_ms
 
 
 def _is_already_processed(
@@ -126,7 +131,7 @@ def _already_processed(
             player_faction=identity.player_faction,
             current_date_time=current_date_time,
         ),
-        integration_events=(),
+        extracted=(),
     )
 
 
@@ -142,14 +147,14 @@ def _processor_failures_result(
             player_faction=identity.player_faction,
             current_date_time=current_date_time,
         ),
-        integration_events=(),
+        extracted=(),
     )
 
 
 def _success_result(
     identity: Identity,
     current_date_time: datetime,
-    integration_events: tuple[IntegrationEvent, ...],
+    extracted: tuple[ExtractedData, ...],
     elapsed_ms: int,
 ) -> ProcessResult:
     return ProcessResult(
@@ -159,5 +164,5 @@ def _success_result(
             current_date_time=current_date_time,
             duration_ms=elapsed_ms,
         ),
-        integration_events=integration_events,
+        extracted=extracted,
     )

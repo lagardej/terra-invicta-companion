@@ -17,10 +17,5 @@ class DomainEvent(ABC):
 class IntegrationEvent(ABC):
     """Base for integration events that cross module boundaries."""
 
-    @classmethod
-    @abstractmethod
-    def type(cls) -> str:
-        """Return the unique string identifier for this message type."""
-
 
 Message = DomainEvent | IntegrationEvent

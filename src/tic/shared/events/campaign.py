@@ -21,11 +21,6 @@ class CampaignDataExtracted(IntegrationEvent):
     start_difficulty: int
     template_name: str
 
-    @classmethod
-    def type(cls) -> str:
-        """Return the unique string identifier for this message type."""
-        return "campaign.data_extracted"
-
 
 @dataclass(frozen=True)
 class ScenarioCustomizations:
