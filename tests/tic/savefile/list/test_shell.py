@@ -14,6 +14,8 @@ from tic.shared.events.savefile import (
     SavefileProcessingSucceeded,
 )
 
+pytestmark = pytest.mark.integration
+
 _NOW = datetime(2030, 1, 1, tzinfo=UTC)
 _CAMPAIGN_START = datetime(2022, 6, 15, tzinfo=UTC)
 _GAME_DATE = datetime(2035, 3, 10, tzinfo=UTC)
@@ -24,7 +26,7 @@ def store() -> DocumentStoreInMemory[SavefileLogEntry]:
     return DocumentStoreInMemory[SavefileLogEntry]()
 
 
-class TestOnProcessingSucceeded:
+class TestSuccessPath:
     async def test_writes_entry_to_store(
         self, store: DocumentStoreInMemory[SavefileLogEntry]
     ) -> None:
@@ -67,7 +69,7 @@ class TestOnProcessingSucceeded:
         assert entries[0].id != entries[1].id
 
 
-class TestOnProcessingFailed:
+class TestFailures:
     async def test_writes_entry_with_reason(
         self, store: DocumentStoreInMemory[SavefileLogEntry]
     ) -> None:

@@ -33,6 +33,7 @@ class ExtractedCampaignData:
     start_difficulty: int
     template_name: str
 
+
 @dataclass(frozen=True)
 class ScenarioCustomizations:
     """ScenarioCustomizations."""
@@ -66,8 +67,6 @@ class ScenarioCustomizations:
     use_player_country_for_starting_councilor: bool
     using_customizations: bool
     variable_project_unlocks: bool
-
-
 
 
 @log_call()
