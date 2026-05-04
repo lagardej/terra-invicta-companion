@@ -29,11 +29,9 @@ from tic.shared.command import CommandContext, CommandHandler
 from tic.shared.event_store import EventFilter, EventStore
 from tic.shared.event_subscriber import EventSubscriber, Subscription
 from tic.shared.events.base import DomainEvent, IntegrationEvent, Message
-from tic.shared.events.campaign import CampaignDataExtracted
+from tic.shared.events.campaign import CampaignDataExtracted, ScenarioCustomizations
 from tic.shared.events.faction import FactionDataExtracted
-from tic.shared.events.savefile import (
-    SavefileChangeDetected,
-)
+from tic.shared.events.savefile import SavefileChangeDetected
 from tic.shared.log_call import log_call
 from tic.shared.message_bus import MessageBus
 
@@ -104,43 +102,15 @@ class SavefileProcess(EventSubscriber):
         return CommandContext(state=state), query_result.max_sequence
 
 
-def _to_integration_events(
-    extracted: Sequence[ExtractedData],
-) -> tuple[IntegrationEvent, ...]:
-    events: list[IntegrationEvent] = []
-    for item in extracted:
-        if isinstance(item, ExtractedCampaignData):
-            events.append(
-                CampaignDataExtracted(
-                    campaign_start_version=item.campaign_start_version,
-                    current_date_time=item.current_date_time,
-                    current_quarter_since_start=item.current_quarter_since_start,
-                    days_in_campaign=item.days_in_campaign,
-                    difficulty=item.difficulty,
-                    latest_save_version=item.latest_save_version,
-                    real_world_campaign_start=item.real_world_campaign_start,
-                    scenario_customizations=item.scenario_customizations,
-                    start_difficulty=item.start_difficulty,
-                    template_name=item.template_name,
-                )
-            )
-        elif isinstance(item, ExtractedFactionData):
-            events.append(
-                FactionDataExtracted(
-                    id=item.id,
-                    abductions=item.abductions,
-                    armies=item.armies,
-                    atrocities=item.atrocities,
-                    councilors=item.councilors,
-                    current_date_time=item.current_date_time,
-                    fleets=item.fleets,
-                    is_ai=item.is_ai,
-                    mission_control_usage=item.mission_control_usage,
-                    template_name=item.template_name,
-                    resources=item.resources,
-                )
-            )
-    return tuple(events)
+def _load(event: SavefileChangeDetected) -> dict:
+    path = event.path
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rb") as fh:
+        return json.load(fh, parse_constant=_parse_constant)
+
+
+def _parse_constant(c: str) -> float:
+    return float(c)
 
 
 def _event_filter(identity: Identity) -> EventFilter:
@@ -153,20 +123,60 @@ def _event_filter(identity: Identity) -> EventFilter:
     )
 
 
-def _load(event: SavefileChangeDetected) -> dict:
-    path = event.path
-    opener = gzip.open if path.suffix == ".gz" else open
-    with opener(path, "rb") as fh:
-        return json.load(fh, parse_constant=_parse_constant)
-
-
-def _parse_constant(c: str) -> float:
-    return float(c)
-
-
 def _fold_state(history: Sequence[DomainEvent]) -> SavefileState:
     state = SavefileState(current_date_time=None)
     for event in history:
         if isinstance(event, SavefileProcessingSucceeded):
             state = SavefileState(current_date_time=event.current_date_time)
     return state
+
+
+def _to_integration_events(
+    extracted: Sequence[ExtractedData],
+) -> tuple[IntegrationEvent, ...]:
+    events: list[IntegrationEvent] = []
+    for item in extracted:
+        if isinstance(item, ExtractedCampaignData):
+            events.append(_to_campaign_data_extracted(item))
+        elif isinstance(item, ExtractedFactionData):
+            events.append(_to_faction_data_extracted(item))
+    return tuple(events)
+
+
+def _to_campaign_data_extracted(
+    item: ExtractedCampaignData,
+) -> CampaignDataExtracted:
+    scenario_customizations = ScenarioCustomizations(
+        **vars(item.scenario_customizations)
+    )
+
+    return CampaignDataExtracted(
+        campaign_start_version=item.campaign_start_version,
+        current_date_time=item.current_date_time,
+        current_quarter_since_start=item.current_quarter_since_start,
+        days_in_campaign=item.days_in_campaign,
+        difficulty=item.difficulty,
+        latest_save_version=item.latest_save_version,
+        real_world_campaign_start=item.real_world_campaign_start,
+        scenario_customizations=scenario_customizations,
+        start_difficulty=item.start_difficulty,
+        template_name=item.template_name,
+    )
+
+
+def _to_faction_data_extracted(
+    item: ExtractedFactionData,
+) -> FactionDataExtracted:
+    return FactionDataExtracted(
+        id=item.id,
+        abductions=item.abductions,
+        armies=item.armies,
+        atrocities=item.atrocities,
+        councilors=item.councilors,
+        current_date_time=item.current_date_time,
+        fleets=item.fleets,
+        is_ai=item.is_ai,
+        mission_control_usage=item.mission_control_usage,
+        template_name=item.template_name,
+        resources=item.resources,
+    )
