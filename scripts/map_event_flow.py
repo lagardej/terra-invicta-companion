@@ -21,10 +21,21 @@ from pathlib import Path
 class Occurrence:
     """Single publish/listen occurrence found during AST scan."""
 
+    event_name: str
+    event_kind: str
     file: str
     line: int
     detail: str
     caller: str | None = None
+
+
+@dataclass(frozen=True)
+class EventClass:
+    """Discovered event class metadata from source modules."""
+
+    name: str
+    kind: str
+    module: str
 
 
 def _unwrap_cast(node: ast.AST) -> ast.AST:
@@ -129,16 +140,30 @@ def _extract_type_names_from_annotation(node: ast.AST) -> set[str]:
     return refs
 
 
-def _event_classes_from_file(file_path: Path) -> set[str]:
+def _module_path_for_file(file_path: Path, src_root: Path) -> str:
+    return file_path.relative_to(src_root).with_suffix("").as_posix().replace("/", ".")
+
+
+def _event_classes_from_file(file_path: Path, src_root: Path) -> list[EventClass]:
     tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
-    result: set[str] = set()
+    result: list[EventClass] = []
+    module = _module_path_for_file(file_path, src_root)
     for node in ast.walk(tree):
         if not isinstance(node, ast.ClassDef):
             continue
         for base in node.bases:
             base_ref = _extract_ref(base)
-            if base_ref in {"DomainEvent", "IntegrationEvent"}:
-                result.add(node.name)
+            if base_ref == "DomainEvent":
+                result.append(EventClass(name=node.name, kind="Domain", module=module))
+                break
+            if base_ref == "IntegrationEvent":
+                result.append(
+                    EventClass(
+                        name=node.name,
+                        kind="Integration",
+                        module=module,
+                    )
+                )
                 break
     return result
 
@@ -155,16 +180,62 @@ def _events_constructed_in_file(file_path: Path, known_events: set[str]) -> set[
     return constructed
 
 
+def _infer_function_event_refs(
+    tree: ast.Module,
+    known_events: set[str],
+) -> dict[str, set[str]]:
+    function_nodes = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+
+    inferred: dict[str, set[str]] = defaultdict(set)
+
+    for node in function_nodes:
+        if node.returns is None:
+            continue
+        refs = _extract_event_names_from_annotation(node.returns, known_events)
+        if refs:
+            inferred[node.name].update(refs)
+
+    changed = True
+    while changed:
+        changed = False
+        for node in function_nodes:
+            refs = set(inferred.get(node.name, set()))
+            for child in ast.walk(node):
+                if not isinstance(child, ast.Call):
+                    continue
+                ref = _extract_ref(child)
+                if ref is None:
+                    continue
+                if ref in known_events:
+                    refs.add(ref)
+                refs.update(inferred.get(ref, set()))
+
+            if refs != inferred.get(node.name, set()):
+                inferred[node.name] = refs
+                changed = True
+
+    return {name: refs for name, refs in inferred.items() if refs}
+
+
 class _EventFlowVisitor(ast.NodeVisitor):
     def __init__(
         self,
         rel_path: str,
         known_events: set[str],
+        event_kinds_by_name: dict[str, set[str]],
+        event_kinds_by_module_name: dict[tuple[str, str], set[str]],
         global_class_field_events: dict[str, dict[str, set[str]]],
         inferred_integration_events: set[str],
+        function_event_refs: dict[str, set[str]],
     ) -> None:
         self.rel_path = rel_path
         self.known_events = known_events
+        self._event_kinds_by_name = event_kinds_by_name
+        self._event_kinds_by_module_name = event_kinds_by_module_name
         self.publishes: list[Occurrence] = []
         self.listens: list[Occurrence] = []
         self._current_class: str | None = None
@@ -174,9 +245,31 @@ class _EventFlowVisitor(ast.NodeVisitor):
         self._class_field_events: dict[str, dict[str, set[str]]] = defaultdict(dict)
         self._global_class_field_events = global_class_field_events
         self._inferred_integration_events = inferred_integration_events
+        self._function_event_refs = function_event_refs
+        self._imported_event_kinds: dict[str, set[str]] = {}
+        self._module_aliases: dict[str, str] = {}
         self._class_handler_result_type: dict[str, dict[str, set[str]]] = defaultdict(
             dict
         )
+
+    def _event_kinds_for_ref(self, event_ref: str, node: ast.AST | None) -> set[str]:
+        if event_ref in self._imported_event_kinds:
+            return set(self._imported_event_kinds[event_ref])
+
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id in self._module_aliases
+        ):
+            module_name = self._module_aliases[node.value.id]
+            by_module = self._event_kinds_by_module_name.get(
+                (module_name, event_ref),
+                set(),
+            )
+            if by_module:
+                return set(by_module)
+
+        return set(self._event_kinds_by_name.get(event_ref, set()))
 
     def _current_caller(self) -> str | None:
         if not self._function_stack:
@@ -186,28 +279,45 @@ class _EventFlowVisitor(ast.NodeVisitor):
             return f"{self._class_stack[-1]}.{function_name}"
         return function_name
 
-    def _record_publish(self, node: ast.AST, event_ref: str) -> None:
+    def _record_publish(
+        self,
+        node: ast.AST,
+        event_ref: str,
+        event_node: ast.AST | None,
+    ) -> None:
         if event_ref not in self.known_events:
             return
-        self.publishes.append(
-            Occurrence(
-                file=self.rel_path,
-                line=getattr(node, "lineno", 1),
-                detail=event_ref,
-                caller=self._current_caller(),
+        for event_kind in sorted(self._event_kinds_for_ref(event_ref, event_node)):
+            self.publishes.append(
+                Occurrence(
+                    event_name=event_ref,
+                    event_kind=event_kind,
+                    file=self.rel_path,
+                    line=getattr(node, "lineno", 1),
+                    detail=event_ref,
+                    caller=self._current_caller(),
+                )
             )
-        )
 
-    def _record_listen(self, node: ast.AST, event_ref: str, handler_ref: str) -> None:
+    def _record_listen(
+        self,
+        node: ast.AST,
+        event_ref: str,
+        handler_ref: str,
+        event_node: ast.AST | None,
+    ) -> None:
         if event_ref not in self.known_events:
             return
-        self.listens.append(
-            Occurrence(
-                file=self.rel_path,
-                line=getattr(node, "lineno", 1),
-                detail=f"{event_ref} -> {handler_ref}",
+        for event_kind in sorted(self._event_kinds_for_ref(event_ref, event_node)):
+            self.listens.append(
+                Occurrence(
+                    event_name=event_ref,
+                    event_kind=event_kind,
+                    file=self.rel_path,
+                    line=getattr(node, "lineno", 1),
+                    detail=f"{event_ref} -> {handler_ref}",
+                )
             )
-        )
 
     def _event_refs_from_expr(self, node: ast.AST) -> set[str]:  # noqa: C901
         node = _unwrap_cast(node)
@@ -252,6 +362,9 @@ class _EventFlowVisitor(ast.NodeVisitor):
             if ref in self.known_events:
                 self._var_types[target.id] = {ref}
                 return
+            if ref in self._function_event_refs:
+                self._var_types[target.id] = set(self._function_event_refs[ref])
+                return
             if (
                 isinstance(value.func, ast.Attribute)
                 and value.func.attr == "handle"
@@ -268,6 +381,13 @@ class _EventFlowVisitor(ast.NodeVisitor):
                 if refs:
                     self._var_types[target.id] = set(refs)
                     return
+        if isinstance(value, (ast.Tuple, ast.List)):
+            refs: set[str] = set()
+            for elt in value.elts:
+                refs.update(self._event_refs_from_expr(elt))
+            if refs:
+                self._var_types[target.id] = refs
+                return
         if isinstance(value, ast.Await):
             self._infer_var_assignment(target, value.value)
             return
@@ -343,22 +463,42 @@ class _EventFlowVisitor(ast.NodeVisitor):
                 ):
                     refs = set(self._inferred_integration_events)
                 for ref in refs:
-                    self._record_publish(node, ref)
+                    self._record_publish(node, ref, arg)
 
         if isinstance(node.func, ast.Attribute) and node.func.attr == "subscribe":
             if len(node.args) == 2:
                 event_ref = _extract_ref(node.args[0])
                 handler_ref = _extract_ref(node.args[1])
                 if event_ref is not None and handler_ref is not None:
-                    self._record_listen(node, event_ref, handler_ref)
+                    self._record_listen(node, event_ref, handler_ref, node.args[0])
             else:
                 for arg in node.args:
                     if isinstance(arg, (ast.Tuple, ast.List)) and len(arg.elts) == 2:
                         event_ref = _extract_ref(arg.elts[0])
                         handler_ref = _extract_ref(arg.elts[1])
                         if event_ref is not None and handler_ref is not None:
-                            self._record_listen(node, event_ref, handler_ref)
+                            self._record_listen(
+                                node,
+                                event_ref,
+                                handler_ref,
+                                arg.elts[0],
+                            )
 
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:  # noqa: N802
+        if node.module is not None:
+            for alias in node.names:
+                local_name = alias.asname or alias.name
+                kinds = self._event_kinds_by_module_name.get((node.module, alias.name))
+                if kinds:
+                    self._imported_event_kinds[local_name] = set(kinds)
+        self.generic_visit(node)
+
+    def visit_Import(self, node: ast.Import) -> None:  # noqa: N802
+        for alias in node.names:
+            if alias.asname is not None:
+                self._module_aliases[alias.asname] = alias.name
         self.generic_visit(node)
 
     def visit_Assign(self, node: ast.Assign) -> None:  # noqa: N802
@@ -410,7 +550,7 @@ class _EventFlowVisitor(ast.NodeVisitor):
                     event_ref = _extract_ref(event_node)
                     handler_ref = _extract_ref(handler_node)
                     if event_ref is not None and handler_ref is not None:
-                        self._record_listen(subnode, event_ref, handler_ref)
+                        self._record_listen(subnode, event_ref, handler_ref, event_node)
 
 
 def _collect_python_files(src_root: Path) -> list[Path]:
@@ -420,30 +560,30 @@ def _collect_python_files(src_root: Path) -> list[Path]:
 def _group_by_event(
     publishes: list[Occurrence],
     listens: list[Occurrence],
-) -> dict[str, dict[str, list[Occurrence]]]:
-    grouped: dict[str, dict[str, list[Occurrence]]] = defaultdict(
+) -> dict[tuple[str, str], dict[str, list[Occurrence]]]:
+    grouped: dict[tuple[str, str], dict[str, list[Occurrence]]] = defaultdict(
         lambda: {"publishes": [], "listens": []}
     )
 
     for item in publishes:
-        grouped[item.detail]["publishes"].append(item)
+        grouped[(item.event_name, item.event_kind)]["publishes"].append(item)
 
     for item in listens:
-        event_ref = item.detail.split(" -> ", maxsplit=1)[0]
-        grouped[event_ref]["listens"].append(item)
+        grouped[(item.event_name, item.event_kind)]["listens"].append(item)
 
-    return dict(sorted(grouped.items(), key=lambda kv: kv[0].lower()))
+    return dict(sorted(grouped.items(), key=lambda kv: (kv[0][1], kv[0][0].lower())))
 
 
-def _format_report(grouped: dict[str, dict[str, list[Occurrence]]]) -> str:
+def _format_report(
+    grouped: dict[tuple[str, str], dict[str, list[Occurrence]]],
+) -> str:
     def _source_link(item: Occurrence) -> str:
         target = f"../{item.file}#L{item.line}"
         label = f"{item.file}:{item.line}"
         return f"[{label}]({target})"
 
     lines: list[str] = []
-    lines.append("Event Flow Map")
-    lines.append("==============")
+    lines.append("# Event Flow Map")
     lines.append("")
 
     if not grouped:
@@ -451,33 +591,51 @@ def _format_report(grouped: dict[str, dict[str, list[Occurrence]]]) -> str:
         lines.append("")
         return "\n".join(lines)
 
-    for event_name, buckets in grouped.items():
-        lines.append(f"{event_name}")
-        lines.append("-" * len(event_name))
+    grouped_by_type: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for event_key in grouped:
+        grouped_by_type[event_key[1]].append(event_key)
 
-        publishes = sorted(buckets["publishes"], key=lambda x: (x.file, x.line))
-        listens = sorted(buckets["listens"], key=lambda x: (x.file, x.line))
+    group_order = ["Domain", "Integration", "Unknown"]
 
-        lines.append("Publishes:")
-        if publishes:
-            for item in publishes:
-                if item.caller:
-                    lines.append(f"  - {_source_link(item)} (from {item.caller})")
-                else:
-                    lines.append(f"  - {_source_link(item)}")
-        else:
-            lines.append("  - none")
+    for group_name in group_order:
+        event_keys = sorted(
+            grouped_by_type.get(group_name, []),
+            key=lambda x: x[0].lower(),
+        )
+        if not event_keys:
+            continue
 
+        heading = f"{group_name} Events"
+        lines.append(f"## {heading}")
         lines.append("")
 
-        lines.append("Listens:")
-        if listens:
-            for item in listens:
-                lines.append(f"  - {_source_link(item)} ({item.detail})")
-        else:
-            lines.append("  - none")
+        for event_name, event_kind in event_keys:
+            buckets = grouped[(event_name, event_kind)]
+            lines.append(f"### {event_name}")
 
-        lines.append("")
+            publishes = sorted(buckets["publishes"], key=lambda x: (x.file, x.line))
+            listens = sorted(buckets["listens"], key=lambda x: (x.file, x.line))
+
+            lines.append("Publishes:")
+            if publishes:
+                for item in publishes:
+                    if item.caller:
+                        lines.append(f"  - {_source_link(item)} (from {item.caller})")
+                    else:
+                        lines.append(f"  - {_source_link(item)}")
+            else:
+                lines.append("  - none")
+
+            lines.append("")
+
+            lines.append("Listens:")
+            if listens:
+                for item in listens:
+                    lines.append(f"  - {_source_link(item)} ({item.detail})")
+            else:
+                lines.append("  - none")
+
+            lines.append("")
 
     return "\n".join(lines)
 
@@ -485,10 +643,20 @@ def _format_report(grouped: dict[str, dict[str, list[Occurrence]]]) -> str:
 def map_event_flow(src_root: Path, out_path: Path) -> Path:  # noqa: C901
     """Inspect source files and write a markdown map of event flow."""
     all_files = _collect_python_files(src_root)
-    event_files = [p for p in all_files if "/events/" in p.as_posix()]
-    known_events: set[str] = set()
+    event_files = [
+        p
+        for p in all_files
+        if "/events/" in p.as_posix() or p.as_posix().endswith("/events.py")
+    ]
+    event_kinds_by_name: dict[str, set[str]] = defaultdict(set)
+    event_kinds_by_module_name: dict[tuple[str, str], set[str]] = defaultdict(set)
     for file_path in event_files:
-        known_events.update(_event_classes_from_file(file_path))
+        for event_class in _event_classes_from_file(file_path, src_root):
+            event_kinds_by_name[event_class.name].add(event_class.kind)
+            event_kinds_by_module_name[(event_class.module, event_class.name)].add(
+                event_class.kind
+            )
+    known_events = set(event_kinds_by_name.keys())
 
     inferred_integration_events: set[str] = set()
     processor_glob = "tic/savefile/process/_processor/*.py"
@@ -521,11 +689,15 @@ def map_event_flow(src_root: Path, out_path: Path) -> Path:  # noqa: C901
     for file_path in all_files:
         tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
         rel_path = file_path.relative_to(src_root.parent).as_posix()
+        function_event_refs = _infer_function_event_refs(tree, known_events)
         visitor = _EventFlowVisitor(
             rel_path=rel_path,
             known_events=known_events,
+            event_kinds_by_name=dict(event_kinds_by_name),
+            event_kinds_by_module_name=dict(event_kinds_by_module_name),
             global_class_field_events=global_class_field_events,
             inferred_integration_events=inferred_integration_events,
+            function_event_refs=function_event_refs,
         )
         visitor.visit(tree)
         publishes.extend(visitor.publishes)
