@@ -18,4 +18,8 @@ class IntegrationEvent(ABC):
     """Base for integration events that cross module boundaries."""
 
 
-Message = DomainEvent | IntegrationEvent
+class Event(ABC):
+    """Use-case-scoped coordination events; not persisted, not inter-context."""
+
+
+Message = DomainEvent | IntegrationEvent | Event

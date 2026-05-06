@@ -29,11 +29,16 @@ class FactionUpdateListener(EventSubscriber):
 
     def subscriptions(self) -> tuple[Subscription, ...]:
         """Return subscription entries for this module."""
-        return ((FactionDataExtracted, self._on_faction_data_extracted),)
+        return ((FactionDataExtracted, self._dispatch),)
+
+    async def _dispatch(self, event: Message) -> None:
+        """Dispatch faction data extraction events to handlers."""
+        match event:
+            case FactionDataExtracted() as e:
+                await self._on_faction_data_extracted(e)
 
     @log_call()
-    async def _on_faction_data_extracted(self, event: Message) -> None:
-        assert isinstance(event, FactionDataExtracted)
+    async def _on_faction_data_extracted(self, event: FactionDataExtracted) -> None:
         command = _to_command(event)
         event_filter = _event_filter(event)
         context, expected_max_sequence = await self._load_context(event_filter)
@@ -41,9 +46,7 @@ class FactionUpdateListener(EventSubscriber):
         domain_event = await self._handler.handle(command, context)
 
         await self._event_store.append(
-            event_filter,
-            domain_event,
-            expected_max_sequence=expected_max_sequence,
+            event_filter, expected_max_sequence, domain_event
         )
         await self._bus.publish(domain_event)
 

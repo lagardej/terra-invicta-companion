@@ -30,8 +30,8 @@ class EventStoreInMemory(EventStore):
     async def append(
         self,
         filter: EventFilter,
-        *events: DomainEvent,
         expected_max_sequence: int,
+        *events: DomainEvent,
     ) -> None:
         """Append events if context has not changed since query.
 

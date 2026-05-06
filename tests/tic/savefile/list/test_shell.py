@@ -7,12 +7,12 @@ from datetime import UTC, datetime
 import pytest
 
 from tic._infra.document_store_in_memory import DocumentStoreInMemory
-from tic.savefile.list.document import SavefileLogEntry, SavefileProcessingStatus
-from tic.savefile.list.shell import SavefileListListener
-from tic.shared.events.savefile import (
+from tic.savefile._events import (
     SavefileProcessingFailed,
     SavefileProcessingSucceeded,
 )
+from tic.savefile.list.document import SavefileLogEntry, SavefileProcessingStatus
+from tic.savefile.list.shell import SavefileListListener
 
 pytestmark = pytest.mark.integration
 

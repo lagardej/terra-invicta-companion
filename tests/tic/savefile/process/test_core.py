@@ -5,18 +5,21 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
+from returns.result import Failure, Result, Success
 
-from tic.savefile.process._extract.identity import Identity
-from tic.savefile.process.core import (
+from tic.savefile._events import (
+    SavefileProcessingSucceeded,
+)
+from tic.savefile.process.core._processor.campaign import ExtractedCampaignData
+from tic.savefile.process.core.command import (
+    AlreadyProcessedFailure,
+    ProcessingFailure,
     ProcessResult,
     ProcessSavefile,
     ProcessSavefileHandler,
     SavefileState,
 )
-from tic.savefile.process.events import (
-    SavefileProcessingFailed,
-    SavefileProcessingSucceeded,
-)
+from tic.savefile.process.core.identity import Identity
 from tic.shared.command import CommandContext
 
 from .conftest import valid_savefile_data
@@ -48,7 +51,7 @@ def _command(data: dict | None = None) -> ProcessSavefile:
 async def _handle(
     command: ProcessSavefile,
     context: CommandContext[SavefileState],
-) -> ProcessResult:
+) -> Result[ProcessResult, ProcessingFailure]:
     return await ProcessSavefileHandler().handle(command, context)
 
 
@@ -57,9 +60,11 @@ class TestSuccessPath:
     async def test_returns_success_domain_event_with_extracted_data(self) -> None:
         result = await _handle(_command(), _context())
 
-        assert isinstance(result, ProcessResult)
-        assert isinstance(result.domain_event, SavefileProcessingSucceeded)
-        assert len(result.extracted) > 0
+        assert isinstance(result, Success)
+        process_result = result.unwrap()
+        assert isinstance(process_result.status_event, SavefileProcessingSucceeded)
+        assert len(process_result.extracted_data) > 0
+        assert isinstance(process_result.extracted_data[0], ExtractedCampaignData)
 
 
 class TestFailures:
@@ -72,5 +77,5 @@ class TestFailures:
             _context(current_date_time=datetime(2099, 1, 1, tzinfo=UTC)),
         )
 
-        assert isinstance(result.domain_event, SavefileProcessingFailed)
-        assert "already processed" in result.domain_event.reason.lower()
+        assert isinstance(result, Failure)
+        assert isinstance(result.failure(), AlreadyProcessedFailure)

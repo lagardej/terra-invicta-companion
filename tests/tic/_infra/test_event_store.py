@@ -70,7 +70,7 @@ class TestEventStoreInMemoryQuery:
 
     async def test_returns_matching_event_after_append(self) -> None:
         store = EventStoreInMemory()
-        await store.append(_FILTER, _EVENT_1, expected_max_sequence=0)
+        await store.append(_FILTER, 0, _EVENT_1)
 
         result = await store.query(_FILTER)
 
@@ -79,8 +79,8 @@ class TestEventStoreInMemoryQuery:
 
     async def test_returns_all_matching_events_in_order(self) -> None:
         store = EventStoreInMemory()
-        await store.append(_FILTER, _EVENT_1, expected_max_sequence=0)
-        await store.append(_FILTER, _EVENT_2, expected_max_sequence=1)
+        await store.append(_FILTER, 0, _EVENT_1)
+        await store.append(_FILTER, 1, _EVENT_2)
 
         result = await store.query(_FILTER)
 
@@ -89,8 +89,8 @@ class TestEventStoreInMemoryQuery:
 
     async def test_payload_predicate_excludes_non_matching_events(self) -> None:
         store = EventStoreInMemory()
-        await store.append(_FILTER, _EVENT_1, expected_max_sequence=0)
-        await store.append(_OTHER_FILTER, _EVENT_OTHER, expected_max_sequence=0)
+        await store.append(_FILTER, 0, _EVENT_1)
+        await store.append(_OTHER_FILTER, 0, _EVENT_OTHER)
 
         result = await store.query(_FILTER)
         assert result.events == (_EVENT_1,)
@@ -100,7 +100,7 @@ class TestEventStoreInMemoryQuery:
 
     async def test_event_type_filter_excludes_other_types(self) -> None:
         store = EventStoreInMemory()
-        await store.append(_FILTER, _EVENT_1, expected_max_sequence=0)
+        await store.append(_FILTER, 0, _EVENT_1)
 
         result = await store.query(EventFilter(event_types=("other.event",)))
 
@@ -113,22 +113,22 @@ class TestEventStoreInMemoryAppend:
 
     async def test_raises_concurrency_error_when_sequence_stale(self) -> None:
         store = EventStoreInMemory()
-        await store.append(_FILTER, _EVENT_1, expected_max_sequence=0)
+        await store.append(_FILTER, 0, _EVENT_1)
 
         with pytest.raises(ConcurrencyError):
-            await store.append(_FILTER, _EVENT_2, expected_max_sequence=0)
+            await store.append(_FILTER, 0, _EVENT_2)
 
     async def test_raises_concurrency_error_on_concurrent_append(self) -> None:
         store = EventStoreInMemory()
-        await store.append(_FILTER, _EVENT_1, expected_max_sequence=0)
-        await store.append(_FILTER, _EVENT_2, expected_max_sequence=1)
+        await store.append(_FILTER, 0, _EVENT_1)
+        await store.append(_FILTER, 1, _EVENT_2)
 
         with pytest.raises(ConcurrencyError):
-            await store.append(_FILTER, _EVENT_2, expected_max_sequence=1)
+            await store.append(_FILTER, 1, _EVENT_2)
 
     async def test_append_multiple_events_at_once(self) -> None:
         store = EventStoreInMemory()
-        await store.append(_FILTER, _EVENT_1, _EVENT_2, expected_max_sequence=0)
+        await store.append(_FILTER, 0, _EVENT_1, _EVENT_2)
 
         result = await store.query(_FILTER)
         assert result.events == (_EVENT_1, _EVENT_2)
@@ -136,8 +136,8 @@ class TestEventStoreInMemoryAppend:
 
     async def test_independent_sequences_per_filter(self) -> None:
         store = EventStoreInMemory()
-        await store.append(_FILTER, _EVENT_1, expected_max_sequence=0)
-        await store.append(_OTHER_FILTER, _EVENT_OTHER, expected_max_sequence=0)
+        await store.append(_FILTER, 0, _EVENT_1)
+        await store.append(_OTHER_FILTER, 0, _EVENT_OTHER)
 
         result = await store.query(_FILTER)
         assert result.max_sequence == 1

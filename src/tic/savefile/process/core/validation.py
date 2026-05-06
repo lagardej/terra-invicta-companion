@@ -1,11 +1,16 @@
-"""Shared helpers for validated savefile input extraction."""
+"""Validation error returned by scoped savefile processors."""
 
-from __future__ import annotations
+from dataclasses import dataclass
 
 from pydantic import BaseModel, ValidationError
 from returns.result import Failure, Result, Success
 
-from tic.savefile.process._internal.validation_failure import ValidationFailure
+
+@dataclass(frozen=True)
+class ValidationFailure:
+    """Validation error returned by scoped savefile processors."""
+
+    violations: tuple[str, ...]
 
 
 def validate_input[ModelT: BaseModel](
@@ -16,4 +21,5 @@ def validate_input[ModelT: BaseModel](
     try:
         return Success(model_type.model_validate(data, by_alias=True))
     except ValidationError as exc:
-        return Failure(ValidationFailure(reason=str(exc)))
+        violations = tuple(error["msg"] for error in exc.errors())
+        return Failure(ValidationFailure(violations=violations))

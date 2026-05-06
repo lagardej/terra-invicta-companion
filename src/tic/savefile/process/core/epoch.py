@@ -9,25 +9,39 @@ class EpochLike(Protocol):
     """Protocol for epoch-style date/time objects."""
 
     @property
-    def year(self) -> int: ...
+    def year(self) -> int:
+        """Return the year component."""
+        ...
 
     @property
-    def month(self) -> int: ...
+    def month(self) -> int:
+        """Return the month component (1-12)."""
+        ...
 
     @property
-    def day(self) -> int: ...
+    def day(self) -> int:
+        """Return the day of the month component."""
+        ...
 
     @property
-    def hour(self) -> int: ...
+    def hour(self) -> int:
+        """Return the hour component (0-23)."""
+        ...
 
     @property
-    def minute(self) -> int: ...
+    def minute(self) -> int:
+        """Return the minute component (0-59)."""
+        ...
 
     @property
-    def second(self) -> int: ...
+    def second(self) -> int:
+        """Return the second component (0-59)."""
+        ...
 
     @property
-    def millisecond(self) -> int: ...
+    def millisecond(self) -> int:
+        """Return the millisecond component (0-999)."""
+        ...
 
 
 def to_datetime(epoch: EpochLike) -> datetime:

@@ -71,6 +71,74 @@ Events are the source of truth for import history. The read model is a projectio
 
 ---
 
+## Event types and visibility boundaries
+
+Events are classified into three categories by their scope and crossing boundaries:
+
+### DomainEvent — within bounded context
+
+- Represents state change within a single bounded context
+- Persisted to the event store (historical record)
+- Published on the bus only within the context
+- Examples: `SavefileProcessingSucceeded`, `FactionUpdated`
+
+**Module privacy:** Domain events live in `src/tic/<context>/_events.py` (underscore prefix signals "private to context").
+
+**Import rule:** Never import domain events from another context. Use integration events instead.
+
+```python
+# ✓ Within savefile context
+from tic.savefile._events import SavefileProcessingSucceeded
+
+# ✗ From outside savefile context
+from tic.savefile._events import SavefileProcessingSucceeded  # Don't do this
+```
+
+### IntegrationEvent — across bounded contexts
+
+- Crosses context boundaries
+- Published on shared bus for inter-context communication
+- Never persisted (transient signal, not historical record)
+- Examples: `SavefileChangeDetected`, `CampaignDataExtracted` (in shared/events/)
+
+**Module location:** Defined in `src/tic/shared/events/` — publicly importable.
+
+**Purpose:** Enable loose coupling. The importing context doesn't depend on the exporting context's internal event structure; it depends on this publicly-exported contract.
+
+```python
+# ✓ From any context
+from tic.shared.events.savefile import SavefileChangeDetected
+from tic.shared.events.campaign import CampaignDataExtracted
+```
+
+### Event — use-case-scoped coordination (not persisted)
+
+- Internal to a use case; not persisted to event store
+- Used for dispatching within a shell module when handling multiple event types
+- Never crosses context boundaries
+- Example: `SavefileCampaignDataExtracted` (coordination signal from inbound to outbound)
+
+**Visibility rule:** Treat like DomainEvent — keep in `_events.py` and don't export outside context.
+
+### Read-model projections listen to domain events
+
+When a use case needs a read model (e.g., `SavefileListListener` projecting processing status), it **listens to domain events** from its own context, not integration events.
+
+- Reason: The projection is internal to the context. It's just a different concern (read vs write).
+- If an external system needs to react, it subscribes to an integration event published by the context's outbound shell.
+
+```python
+# SavefileListListener is within savefile context, so:
+from tic.savefile._events import SavefileProcessingSucceeded  # ✓ Domain event
+
+# External integrator would subscribe to:
+from tic.shared.events.savefile import SavefileProcessingSucceeded  # Different event!
+```
+
+(Note: These are distinct event classes with the same name. The shared version is the cross-context contract.)
+
+---
+
 ## Web stack
 
 - **FastAPI** — HTTP + native WebSocket support

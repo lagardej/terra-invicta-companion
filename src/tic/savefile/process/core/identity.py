@@ -8,9 +8,8 @@ from datetime import datetime
 from pydantic import AliasChoices, BaseModel, Field
 from returns.result import Failure, Result
 
-from tic.savefile.process._internal.epoch import to_datetime
-from tic.savefile.process._internal.validated_input import validate_input
-from tic.savefile.process._internal.validation_failure import ValidationFailure
+from tic.savefile.process.core.epoch import to_datetime
+from tic.savefile.process.core.validation import ValidationFailure, validate_input
 
 
 @dataclass(frozen=True)
@@ -45,6 +44,8 @@ def extract_identity_and_current_date_time(
 def _extract_identity_inputs(
     validated: _IdentityInput,
 ) -> Result[tuple[_PlayerValue, _GlobalValuesValue, _TimeValue], ValidationFailure]:
+    violations: list[str] = []
+
     player_value = next(
         (
             item.value
@@ -54,18 +55,25 @@ def _extract_identity_inputs(
         None,
     )
     if player_value is None:
-        return Failure(
-            ValidationFailure(reason="no human player faction found in player_state")
-        )
+        violations.append("no human player faction found in player_state")
 
     global_values = validated.gamestates.global_values_state[0].value
-    time_state = validated.gamestates.time_state[0].value
-    if isinstance(global_values, _GlobalValuesValue) and isinstance(
-        time_state, _TimeValue
-    ):
-        return Result.from_value((player_value, global_values, time_state))
+    if not isinstance(global_values, _GlobalValuesValue):
+        actual_type = type(global_values).__name__
+        violations.append(f"global_values_state[0] has unexpected type: {actual_type}")
 
-    return Failure(ValidationFailure(reason="invalid identity input"))
+    time_state = validated.gamestates.time_state[0].value
+    if not isinstance(time_state, _TimeValue):
+        actual_type = type(time_state).__name__
+        violations.append(f"time_state[0] has unexpected type: {actual_type}")
+
+    if violations:
+        return Failure(ValidationFailure(violations=tuple(violations)))
+
+    assert player_value is not None
+    assert isinstance(global_values, _GlobalValuesValue)
+    assert isinstance(time_state, _TimeValue)
+    return Result.from_value((player_value, global_values, time_state))
 
 
 class _CurrentId(BaseModel):

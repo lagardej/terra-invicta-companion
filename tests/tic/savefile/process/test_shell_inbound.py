@@ -7,26 +7,33 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from returns.result import Result, Success
 
 from tic._infra.bus_in_memory import MessageBusInMemory
 from tic._infra.event_store_in_memory import EventStoreInMemory
-from tic.savefile.process._extract.identity import Identity
-from tic.savefile.process._processor.campaign import (
-    ExtractedCampaignData,
-)
-from tic.savefile.process._processor.campaign import (
-    ScenarioCustomizations as ExtractedScenarioCustomizations,
-)
-from tic.savefile.process.core import ProcessResult, ProcessSavefile, SavefileState
-from tic.savefile.process.events import (
+from tic.savefile._events import (
+    SavefileCampaignDataExtracted,
+    SavefileIdentityExtractionFailed,
     SavefileProcessingFailed,
     SavefileProcessingSucceeded,
 )
-from tic.savefile.process.shell import SavefileProcess
+from tic.savefile.process.core._processor.campaign import (
+    ExtractedCampaignData,
+)
+from tic.savefile.process.core._processor.campaign import (
+    ScenarioCustomizations as ExtractedScenarioCustomizations,
+)
+from tic.savefile.process.core.command import (
+    ProcessingFailure,
+    ProcessResult,
+    ProcessSavefile,
+    SavefileState,
+)
+from tic.savefile.process.core.identity import Identity
+from tic.savefile.process.shell.inbound import SavefileProcess
 from tic.shared.command import CommandContext
 from tic.shared.event_store import EventFilter
 from tic.shared.events.base import Message
-from tic.shared.events.campaign import CampaignDataExtracted, ScenarioCustomizations
 from tic.shared.events.savefile import SavefileChangeDetected
 
 from .conftest import valid_savefile_data
@@ -48,11 +55,11 @@ class _FakeHandler:
         self,
         command: ProcessSavefile,
         context: CommandContext[SavefileState],
-    ) -> ProcessResult:
+    ) -> Result[ProcessResult, ProcessingFailure]:
         self.calls += 1
         self.command = command
         self.context = context
-        return self._result
+        return Success(self._result)
 
 
 def _campaign_data() -> ExtractedCampaignData:
@@ -102,7 +109,7 @@ def _campaign_data() -> ExtractedCampaignData:
 
 class TestSuccessPath:
     @pytest.mark.asyncio
-    async def test_persists_and_publishes_handler_output(
+    async def test_persists_and_publishes_domain_and_coordination_events(
         self,
         tmp_path: Path,
     ) -> None:
@@ -112,25 +119,25 @@ class TestSuccessPath:
         extracted = _campaign_data()
         handler = _FakeHandler(
             ProcessResult(
-                domain_event=SavefileProcessingSucceeded(
+                status_event=SavefileProcessingSucceeded(
                     real_world_campaign_start=_REAL_WORLD_CAMPAIGN_START,
                     player_faction=7,
                     current_date_time=_CURRENT_DATE_TIME,
                     duration_ms=12,
                 ),
-                extracted=(extracted,),
+                extracted_data=(extracted,),
             )
         )
         bus = MessageBusInMemory()
         event_store = EventStoreInMemory()
         process = SavefileProcess(bus, event_store, handler)
-        published_campaign_events: list[CampaignDataExtracted] = []
+        published_domain_events: list[Message] = []
 
-        async def capture_campaign_event(event: Message) -> None:
-            assert isinstance(event, CampaignDataExtracted)
-            published_campaign_events.append(event)
+        async def capture_domain_event(event: Message) -> None:
+            published_domain_events.append(event)
 
-        bus.subscribe(CampaignDataExtracted, capture_campaign_event)
+        bus.subscribe(SavefileProcessingSucceeded, capture_domain_event)
+        bus.subscribe(SavefileCampaignDataExtracted, capture_domain_event)
 
         await process._on_savefile_detected(SavefileChangeDetected(path=savefile_path))
 
@@ -155,13 +162,9 @@ class TestSuccessPath:
         )
         assert len(persisted.events) == 1
 
-        assert len(published_campaign_events) == 1
-        published = published_campaign_events[0]
-        assert isinstance(published.scenario_customizations, ScenarioCustomizations)
-        assert (
-            published.scenario_customizations is not extracted.scenario_customizations
-        )
-        assert published.campaign_start_version == extracted.campaign_start_version
+        assert len(published_domain_events) == 2
+        assert isinstance(published_domain_events[0], SavefileProcessingSucceeded)
+        assert isinstance(published_domain_events[1], SavefileCampaignDataExtracted)
 
 
 class TestFailures:
@@ -175,34 +178,35 @@ class TestFailures:
 
         handler = _FakeHandler(
             ProcessResult(
-                domain_event=SavefileProcessingSucceeded(
+                status_event=SavefileProcessingSucceeded(
                     real_world_campaign_start=_REAL_WORLD_CAMPAIGN_START,
                     player_faction=7,
                     current_date_time=_CURRENT_DATE_TIME,
                     duration_ms=12,
                 ),
-                extracted=(),
+                extracted_data=(),
             )
         )
         bus = MessageBusInMemory()
         event_store = EventStoreInMemory()
         process = SavefileProcess(bus, event_store, handler)
-        published_campaign_events: list[CampaignDataExtracted] = []
+        published_events: list[Message] = []
 
-        async def capture_campaign_event(event: Message) -> None:
-            assert isinstance(event, CampaignDataExtracted)
-            published_campaign_events.append(event)
+        async def capture_failure(event: Message) -> None:
+            published_events.append(event)
 
-        bus.subscribe(CampaignDataExtracted, capture_campaign_event)
+        bus.subscribe(SavefileIdentityExtractionFailed, capture_failure)
 
         await process._on_savefile_detected(SavefileChangeDetected(path=savefile_path))
 
         assert handler.calls == 0
+        # Identity extraction failure is observable via integration event only.
         failed = await event_store.query(
             EventFilter(
                 event_types=(SavefileProcessingFailed.type(),),
                 payload_predicates={},
             )
         )
-        assert len(failed.events) == 1
-        assert published_campaign_events == []
+        assert len(failed.events) == 0
+        assert len(published_events) == 1
+        assert isinstance(published_events[0], SavefileIdentityExtractionFailed)

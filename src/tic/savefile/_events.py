@@ -3,7 +3,9 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from tic.shared.events.base import DomainEvent
+from tic.savefile.process.core._processor.campaign import ExtractedCampaignData
+from tic.savefile.process.core._processor.faction import ExtractedFactionData
+from tic.shared.events.base import DomainEvent, Event
 
 
 @dataclass(frozen=True)
@@ -34,3 +36,28 @@ class SavefileProcessingFailed(DomainEvent):
     def type(cls) -> str:
         """Return the unique string identifier for this message type."""
         return "savefile.processing_failed"
+
+
+@dataclass(frozen=True)
+class SavefileCampaignDataExtracted(Event):
+    """Use-case coordination: campaign data extracted from a savefile."""
+
+    data: ExtractedCampaignData
+
+
+@dataclass(frozen=True)
+class SavefileFactionDataExtracted(Event):
+    """Use-case coordination: faction data extracted from a savefile."""
+
+    data: ExtractedFactionData
+
+
+@dataclass(frozen=True)
+class SavefileIdentityExtractionFailed(Event):
+    """Use-case coordination: identity could not be extracted from a savefile.
+
+    Indicates data corruption or malformed savefile that prevents tracking.
+    Not persisted to event store (observable only).
+    """
+
+    reason: str

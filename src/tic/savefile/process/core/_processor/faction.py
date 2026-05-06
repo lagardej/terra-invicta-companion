@@ -9,8 +9,7 @@ import cattr
 from pydantic import AliasChoices, BaseModel, Field
 from returns.result import Failure, Result
 
-from tic.savefile.process._internal.validated_input import validate_input
-from tic.savefile.process._internal.validation_failure import ValidationFailure
+from tic.savefile.process.core.validation import ValidationFailure, validate_input
 from tic.shared.log_call import log_call
 from tic.shared.models import Resources
 
@@ -59,17 +58,17 @@ def _to_faction_player_pairs(
         item.value.id.value: item.value for item in validated.gamestates.player_state
     }
     pairs: list[tuple[_FactionValue, _PlayerValue]] = []
+    violations: list[str] = []
     for item in validated.gamestates.faction_state:
         faction = item.value
         player = player_by_id.get(faction.player.value)
         if player is None:
-            return Failure(
-                ValidationFailure(
-                    reason=f"player with id {faction.player.value} not found"
-                )
-            )
+            violations.append(f"player with id {faction.player.value} not found")
+        else:
+            pairs.append((faction, player))
 
-        pairs.append((faction, player))
+    if violations:
+        return Failure(ValidationFailure(violations=tuple(violations)))
 
     return Result.from_value(tuple(pairs))
 

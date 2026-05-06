@@ -6,20 +6,20 @@ import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
 
 from fastapi import APIRouter
 from fastapi.requests import Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from tic.savefile.list.document import SavefileLogEntry, SavefileProcessingStatus
-from tic.shared.document_store import DocumentStore
-from tic.shared.event_subscriber import EventSubscriber, Subscription
-from tic.shared.events.savefile import (
+from tic.savefile._events import (
     SavefileProcessingFailed,
     SavefileProcessingSucceeded,
 )
+from tic.savefile.list.document import SavefileLogEntry, SavefileProcessingStatus
+from tic.shared.document_store import DocumentStore
+from tic.shared.event_subscriber import EventSubscriber, Subscription
+from tic.shared.events.base import Message
 from tic.shared.http_module import HttpModule
 from tic.shared.log_call import log_call
 
@@ -41,9 +41,17 @@ class SavefileListListener(EventSubscriber):
     def subscriptions(self) -> tuple[Subscription, ...]:
         """Return subscription entries for this module."""
         return (
-            cast(Subscription, (SavefileProcessingSucceeded, self._on_succeeded)),
-            cast(Subscription, (SavefileProcessingFailed, self._on_failed)),
+            (SavefileProcessingSucceeded, self._dispatch),
+            (SavefileProcessingFailed, self._dispatch),
         )
+
+    async def _dispatch(self, event: Message) -> None:
+        """Dispatch processing events to handlers."""
+        match event:
+            case SavefileProcessingSucceeded() as e:
+                await self._on_succeeded(e)
+            case SavefileProcessingFailed() as e:
+                await self._on_failed(e)
 
     @log_call()
     async def _on_succeeded(
