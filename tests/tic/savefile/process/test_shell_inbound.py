@@ -29,7 +29,7 @@ from tic.savefile.process.core.command import (
     SavefileState,
 )
 from tic.savefile.process.core.identity import Identity
-from tic.savefile.process.shell.inbound import SavefileProcess
+from tic.savefile.process.shell.inbound import savefile_process_subscriptions
 from tic.shared.event_store import EventFilter
 from tic.shared.events.base import Message
 from tic.shared.events.savefile import SavefileChangeDetected
@@ -109,7 +109,7 @@ class TestSuccessPath:
         mock_handle = AsyncMock(return_value=Success(process_result))
         bus = MessageBusInMemory()
         event_store = EventStoreInMemory()
-        process = SavefileProcess(bus, event_store)
+        _, on_savefile_detected = savefile_process_subscriptions(bus, event_store)[0]
         published_domain_events: list[Message] = []
 
         async def capture_domain_event(event: Message) -> None:
@@ -120,9 +120,7 @@ class TestSuccessPath:
 
         _patch = "tic.savefile.process.shell.inbound.handle_process_savefile"
         with patch(_patch, mock_handle):
-            await process._on_savefile_detected(
-                SavefileChangeDetected(path=savefile_path)
-            )
+            await on_savefile_detected(SavefileChangeDetected(path=savefile_path))
 
         assert mock_handle.call_count == 1
         command, context = mock_handle.call_args.args
@@ -161,7 +159,7 @@ class TestFailures:
         mock_handle = AsyncMock()
         bus = MessageBusInMemory()
         event_store = EventStoreInMemory()
-        process = SavefileProcess(bus, event_store)
+        _, on_savefile_detected = savefile_process_subscriptions(bus, event_store)[0]
         published_events: list[Message] = []
 
         async def capture_failure(event: Message) -> None:
@@ -171,9 +169,7 @@ class TestFailures:
 
         _patch = "tic.savefile.process.shell.inbound.handle_process_savefile"
         with patch(_patch, mock_handle):
-            await process._on_savefile_detected(
-                SavefileChangeDetected(path=savefile_path)
-            )
+            await on_savefile_detected(SavefileChangeDetected(path=savefile_path))
 
         assert mock_handle.call_count == 0
         # Identity extraction failure is observable via integration event only.

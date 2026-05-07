@@ -6,7 +6,7 @@ from tic.faction.update.shell import FactionUpdateListener
 from tic.home.shell import HomeHttp
 from tic.savefile.list.document import SavefileLogEntry
 from tic.savefile.list.shell import SavefileListHttp, SavefileListListener
-from tic.savefile.process.shell.inbound import SavefileProcess
+from tic.savefile.process.shell.inbound import savefile_process_subscriptions
 from tic.savefile.process.shell.outbound import (
     SavefileProcessingPublisher,
 )
@@ -32,10 +32,6 @@ def register_services(container: ExplicitContainer, profile: Profile) -> None:
     c[SavefileProcessingPublisher] = lambda: SavefileProcessingPublisher(
         bus=c[MessageBus],
     )
-    c[SavefileProcess] = lambda: SavefileProcess(
-        bus=c[MessageBus],
-        event_store=c[EventStore],
-    )
     c[FactionUpdateListener] = lambda: FactionUpdateListener(
         bus=c[MessageBus],
         event_store=c[EventStore],
@@ -45,7 +41,8 @@ def register_services(container: ExplicitContainer, profile: Profile) -> None:
         store=c[DocumentStore[SavefileLogEntry]]
     )
 
-    c[MessageBus].subscribe(*c[SavefileProcess].subscriptions())
+    subs = savefile_process_subscriptions(c[MessageBus], c[EventStore])
+    c[MessageBus].subscribe(*subs)
     c[MessageBus].subscribe(*c[SavefileProcessingPublisher].subscriptions())
     c[MessageBus].subscribe(*c[FactionUpdateListener].subscriptions())
     c[MessageBus].subscribe(*c[SavefileListListener].subscriptions())

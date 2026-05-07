@@ -23,7 +23,6 @@ from tic.savefile.process.core.command import (
     DataProcessingFailure,
     ExtractedData,
     ProcessingFailure,
-    ProcessResult,
     ProcessSavefile,
     SavefileState,
     handle_process_savefile,
@@ -34,31 +33,20 @@ from tic.savefile.process.core.identity import (
 )
 from tic.shared.command import CommandContext
 from tic.shared.event_store import EventFilter, EventStore
-from tic.shared.event_subscriber import EventSubscriber, Subscription
 from tic.shared.events.base import DomainEvent, Message
 from tic.shared.events.savefile import SavefileChangeDetected
 from tic.shared.log_call import log_call
-from tic.shared.message_bus import MessageBus
+from tic.shared.message_bus import MessageBus, Subscription
 
 
-class SavefileProcess(EventSubscriber):
-    """Subscribes to savefile change events and drives processing."""
-
-    def __init__(
-        self,
-        bus: MessageBus,
-        event_store: EventStore,
-    ) -> None:
-        """Initialise with required infrastructure."""
-        self._bus = bus
-        self._event_store = event_store
-
-    def subscriptions(self) -> tuple[Subscription, ...]:
-        """Return subscription entries for this module."""
-        return ((SavefileChangeDetected, self._on_savefile_detected),)
+def savefile_process_subscriptions(
+    bus: MessageBus,
+    event_store: EventStore,
+) -> tuple[Subscription, ...]:
+    """Return subscriptions for savefile change processing."""
 
     @log_call()
-    async def _on_savefile_detected(self, event: Message) -> None:
+    async def _on_savefile_detected(event: Message) -> None:
         assert isinstance(event, SavefileChangeDetected)
         data = _load(event)
 
@@ -68,50 +56,41 @@ class SavefileProcess(EventSubscriber):
             # Not persisted because it is not attachable to a savefile identity.
             vf = identity_and_time_result.failure()
             reason = "; ".join(vf.violations)
-            await self._bus.publish(SavefileIdentityExtractionFailed(reason=reason))
+            await bus.publish(SavefileIdentityExtractionFailed(reason=reason))
             return
 
         identity, current_date_time = identity_and_time_result.unwrap()
         command = ProcessSavefile(data, identity, current_date_time)
 
         event_filter = _event_filter(identity)
-        context, expected_max_sequence = await self._load_context(event_filter)
+        query_result = await event_store.query(event_filter)
+        context = CommandContext(state=_fold_state(query_result.events))
+        expected_max_sequence = query_result.max_sequence
 
         result = await handle_process_savefile(command, context)
 
         match result:
             case Failure(failure_value):
                 # Domain invariant violation or processor failure
-                await self._persist_and_publish(
-                    event_filter,
-                    expected_max_sequence,
-                    _to_failure_event(failure_value, identity, current_date_time),
+                domain_event: DomainEvent = _to_failure_event(
+                    failure_value, identity, current_date_time
                 )
+                await event_store.append(
+                    event_filter, expected_max_sequence, domain_event
+                )
+                await bus.publish(domain_event)
             case Success(process_result):
                 # All processors succeeded
-                await self._persist_and_publish(
+                await event_store.append(
                     event_filter, expected_max_sequence, process_result.status_event
                 )
-                await self._publish_coordination_events(process_result)
+                await bus.publish(process_result.status_event)
+                coordination = _to_coordination_events(process_result.extracted_data)
+                await bus.publish(*coordination)
             case _ as unreachable:
                 raise AssertionError(f"Unexpected result: {unreachable}")
 
-    async def _persist_and_publish(
-        self, event_filter: EventFilter, expected_max_sequence: int, event: DomainEvent
-    ) -> None:
-        await self._event_store.append(event_filter, expected_max_sequence, event)
-        await self._bus.publish(event)
-
-    async def _publish_coordination_events(self, result: ProcessResult) -> None:
-        coordination_events = _to_coordination_events(result.extracted_data)
-        await self._bus.publish(*coordination_events)
-
-    async def _load_context(
-        self, scoped_filter: EventFilter
-    ) -> tuple[CommandContext[SavefileState], int]:
-        query_result = await self._event_store.query(scoped_filter)
-        state = _fold_state(query_result.events)
-        return CommandContext(state=state), query_result.max_sequence
+    return ((SavefileChangeDetected, _on_savefile_detected),)
 
 
 def _load(event: SavefileChangeDetected) -> dict:
