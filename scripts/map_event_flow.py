@@ -578,9 +578,16 @@ def _format_report(
     grouped: dict[tuple[str, str], dict[str, list[Occurrence]]],
 ) -> str:
     def _source_link(item: Occurrence) -> str:
-        target = f"../{item.file}#L{item.line}"
+        target = f"../{item.file}"
         label = f"{item.file}:{item.line}"
         return f"[{label}]({target})"
+
+    def _publish_cell(item: Occurrence) -> str:
+        link = _source_link(item)
+        return f"{link} (from {item.caller})" if item.caller else link
+
+    def _listen_cell(item: Occurrence) -> str:
+        return f"{_source_link(item)} (`{item.detail}`)"
 
     lines: list[str] = []
     lines.append("# Event Flow Map")
@@ -605,37 +612,21 @@ def _format_report(
         if not event_keys:
             continue
 
-        heading = f"{group_name} Events"
-        lines.append(f"## {heading}")
+        lines.append(f"## {group_name} Events")
         lines.append("")
+        lines.append("| Event | Publishes | Listens |")
+        lines.append("| --- | --- | --- |")
 
         for event_name, event_kind in event_keys:
             buckets = grouped[(event_name, event_kind)]
-            lines.append(f"### {event_name}")
-
             publishes = sorted(buckets["publishes"], key=lambda x: (x.file, x.line))
             listens = sorted(buckets["listens"], key=lambda x: (x.file, x.line))
 
-            lines.append("Publishes:")
-            if publishes:
-                for item in publishes:
-                    if item.caller:
-                        lines.append(f"  - {_source_link(item)} (from {item.caller})")
-                    else:
-                        lines.append(f"  - {_source_link(item)}")
-            else:
-                lines.append("  - none")
+            pub_cell = "<br>".join(_publish_cell(p) for p in publishes) if publishes else ""
+            lst_cell = "<br>".join(_listen_cell(l) for l in listens) if listens else ""
+            lines.append(f"| **{event_name}** | {pub_cell} | {lst_cell} |")
 
-            lines.append("")
-
-            lines.append("Listens:")
-            if listens:
-                for item in listens:
-                    lines.append(f"  - {_source_link(item)} ({item.detail})")
-            else:
-                lines.append("  - none")
-
-            lines.append("")
+        lines.append("")
 
     return "\n".join(lines)
 
