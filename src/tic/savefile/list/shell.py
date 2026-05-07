@@ -18,47 +18,30 @@ from tic.savefile._events import (
 )
 from tic.savefile.list.document import SavefileLogEntry, SavefileProcessingStatus
 from tic.shared.document_store import DocumentStore
-from tic.shared.event_subscriber import EventSubscriber, Subscription
 from tic.shared.events.base import Message
 from tic.shared.http_module import HttpModule
 from tic.shared.log_call import log_call
+from tic.shared.message_bus import Subscription
 
 _TEMPLATES_DIR = Path(__file__).parents[4] / "templates"
 
 
-class SavefileListListener(EventSubscriber):
-    """Projects savefile processing events into the log store."""
+def savefile_list_subscriptions(
+    store: DocumentStore[SavefileLogEntry],
+    now: Callable[[], datetime] | None = None,
+) -> tuple[Subscription, ...]:
+    """Return subscriptions for projecting savefile processing events into the log."""
+    _now = _utcnow if now is None else now
 
-    def __init__(
-        self,
-        store: DocumentStore[SavefileLogEntry],
-        now: Callable[[], datetime] | None = None,
-    ) -> None:
-        """Initialise with the log document store."""
-        self._store = store
-        self._now = _utcnow if now is None else now
-
-    def subscriptions(self) -> tuple[Subscription, ...]:
-        """Return subscription entries for this module."""
-        return (
-            (SavefileProcessingSucceeded, self._dispatch),
-            (SavefileProcessingFailed, self._dispatch),
-        )
-
-    async def _dispatch(self, event: Message) -> None:
-        """Dispatch processing events to handlers."""
+    async def _dispatch(event: Message) -> None:
         match event:
             case SavefileProcessingSucceeded() as e:
-                await self._on_succeeded(e)
+                await _on_succeeded(e)
             case SavefileProcessingFailed() as e:
-                await self._on_failed(e)
+                await _on_failed(e)
 
     @log_call()
-    async def _on_succeeded(
-        self,
-        event: SavefileProcessingSucceeded,
-    ) -> None:
-        """Project a SavefileProcessingSucceeded event into the log store."""
+    async def _on_succeeded(event: SavefileProcessingSucceeded) -> None:
         entry = SavefileLogEntry(
             id=_new_id(),
             status=SavefileProcessingStatus.SUCCEEDED,
@@ -67,16 +50,12 @@ class SavefileListListener(EventSubscriber):
             player_faction=event.player_faction,
             current_date_time=event.current_date_time,
             duration_ms=event.duration_ms,
-            recorded_at=self._now(),
+            recorded_at=_now(),
         )
-        await self._store.put(entry.id, entry)
+        await store.put(entry.id, entry)
 
     @log_call()
-    async def _on_failed(
-        self,
-        event: SavefileProcessingFailed,
-    ) -> None:
-        """Project a SavefileProcessingFailed event into the log store."""
+    async def _on_failed(event: SavefileProcessingFailed) -> None:
         entry = SavefileLogEntry(
             id=_new_id(),
             status=SavefileProcessingStatus.FAILED,
@@ -85,9 +64,14 @@ class SavefileListListener(EventSubscriber):
             player_faction=event.player_faction,
             current_date_time=event.current_date_time,
             duration_ms=None,
-            recorded_at=self._now(),
+            recorded_at=_now(),
         )
-        await self._store.put(entry.id, entry)
+        await store.put(entry.id, entry)
+
+    return (
+        (SavefileProcessingSucceeded, _dispatch),
+        (SavefileProcessingFailed, _dispatch),
+    )
 
 
 def _new_id() -> str:

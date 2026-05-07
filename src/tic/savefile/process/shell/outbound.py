@@ -8,51 +8,41 @@ from tic.savefile._events import (
 )
 from tic.savefile.process.core._processor.campaign import ExtractedCampaignData
 from tic.savefile.process.core._processor.faction import ExtractedFactionData
-from tic.shared.event_subscriber import EventSubscriber, Subscription
 from tic.shared.events.base import Message
 from tic.shared.events.campaign import CampaignDataExtracted, ScenarioCustomizations
 from tic.shared.events.faction import FactionDataExtracted
 from tic.shared.log_call import log_call
-from tic.shared.message_bus import MessageBus
+from tic.shared.message_bus import MessageBus, Subscription
 
 
-class SavefileProcessingPublisher(EventSubscriber):
-    """Publishes integration status events from savefile process events."""
+def savefile_processing_publisher_subscriptions(
+    bus: MessageBus,
+) -> tuple[Subscription, ...]:
+    """Return subscriptions for publishing integration events."""
 
-    def __init__(self, bus: MessageBus) -> None:
-        """Initialise with the message bus."""
-        self._bus = bus
-
-    def subscriptions(self) -> tuple[Subscription, ...]:
-        """Return subscription entries for this module."""
-        return (
-            (SavefileCampaignDataExtracted, self._dispatch),
-            (SavefileFactionDataExtracted, self._dispatch),
-        )
-
-    async def _dispatch(self, event: Message) -> None:
-        """Dispatch coordination events to handlers."""
+    async def _dispatch(event: Message) -> None:
         match event:
             case SavefileCampaignDataExtracted() as e:
-                await self._on_campaign_data_extracted(e)
+                await _on_campaign_data_extracted(e)
             case SavefileFactionDataExtracted() as e:
-                await self._on_faction_data_extracted(e)
+                await _on_faction_data_extracted(e)
 
     @log_call()
     async def _on_campaign_data_extracted(
-        self,
         event: SavefileCampaignDataExtracted,
     ) -> None:
-        item = event.data
-        await self._bus.publish(_to_campaign_data_extracted(item))
+        await bus.publish(_to_campaign_data_extracted(event.data))
 
     @log_call()
     async def _on_faction_data_extracted(
-        self,
         event: SavefileFactionDataExtracted,
     ) -> None:
-        item = event.data
-        await self._bus.publish(_to_faction_data_extracted(item))
+        await bus.publish(_to_faction_data_extracted(event.data))
+
+    return (
+        (SavefileCampaignDataExtracted, _dispatch),
+        (SavefileFactionDataExtracted, _dispatch),
+    )
 
 
 def _to_campaign_data_extracted(item: ExtractedCampaignData) -> CampaignDataExtracted:

@@ -1,14 +1,13 @@
 from lagom import ExplicitContainer
 
 from tic._config.profiles import Profile
-from tic.faction.update.core import UpdateFactionHandler
-from tic.faction.update.shell import FactionUpdateListener
+from tic.faction.update.shell import faction_update_subscriptions
 from tic.home.shell import HomeHttp
 from tic.savefile.list.document import SavefileLogEntry
-from tic.savefile.list.shell import SavefileListHttp, SavefileListListener
+from tic.savefile.list.shell import SavefileListHttp, savefile_list_subscriptions
 from tic.savefile.process.shell.inbound import savefile_process_subscriptions
 from tic.savefile.process.shell.outbound import (
-    SavefileProcessingPublisher,
+    savefile_processing_publisher_subscriptions,
 )
 from tic.shared.document_store import DocumentStore
 from tic.shared.event_store import EventStore
@@ -22,27 +21,18 @@ def register_services(container: ExplicitContainer, profile: Profile) -> None:
     c[EventStore] = profile.event_store()
     c[DocumentStore[SavefileLogEntry]] = profile.document_store_savefile_log_entry()
 
-    c[UpdateFactionHandler] = lambda: UpdateFactionHandler()
-
     c[HomeHttp] = lambda: HomeHttp()
     c[SavefileListHttp] = lambda: SavefileListHttp(
         store=c[DocumentStore[SavefileLogEntry]]
     )
 
-    c[SavefileProcessingPublisher] = lambda: SavefileProcessingPublisher(
-        bus=c[MessageBus],
-    )
-    c[FactionUpdateListener] = lambda: FactionUpdateListener(
-        bus=c[MessageBus],
-        event_store=c[EventStore],
-        handler=c[UpdateFactionHandler],
-    )
-    c[SavefileListListener] = lambda: SavefileListListener(
-        store=c[DocumentStore[SavefileLogEntry]]
-    )
+    bus = c[MessageBus]
+    event_store = c[EventStore]
 
-    subs = savefile_process_subscriptions(c[MessageBus], c[EventStore])
+    subs = savefile_process_subscriptions(bus, event_store)
     c[MessageBus].subscribe(*subs)
-    c[MessageBus].subscribe(*c[SavefileProcessingPublisher].subscriptions())
-    c[MessageBus].subscribe(*c[FactionUpdateListener].subscriptions())
-    c[MessageBus].subscribe(*c[SavefileListListener].subscriptions())
+    c[MessageBus].subscribe(*savefile_processing_publisher_subscriptions(bus))
+    c[MessageBus].subscribe(*faction_update_subscriptions(bus, event_store))
+    c[MessageBus].subscribe(
+        *savefile_list_subscriptions(c[DocumentStore[SavefileLogEntry]])
+    )

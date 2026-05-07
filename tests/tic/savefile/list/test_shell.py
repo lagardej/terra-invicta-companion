@@ -12,7 +12,7 @@ from tic.savefile._events import (
     SavefileProcessingSucceeded,
 )
 from tic.savefile.list.document import SavefileLogEntry, SavefileProcessingStatus
-from tic.savefile.list.shell import SavefileListListener
+from tic.savefile.list.shell import savefile_list_subscriptions
 
 pytestmark = pytest.mark.integration
 
@@ -36,9 +36,9 @@ class TestSuccessPath:
             current_date_time=_GAME_DATE,
             duration_ms=42,
         )
-        listener = SavefileListListener(store, now=lambda: _NOW)
+        _, dispatch = savefile_list_subscriptions(store, now=lambda: _NOW)[0]
 
-        await listener._on_succeeded(event)
+        await dispatch(event)
 
         entries = await store.all()
         assert len(entries) == 1
@@ -60,10 +60,10 @@ class TestSuccessPath:
             current_date_time=_GAME_DATE,
             duration_ms=10,
         )
-        listener = SavefileListListener(store, now=lambda: _NOW)
+        _, dispatch = savefile_list_subscriptions(store, now=lambda: _NOW)[0]
 
-        await listener._on_succeeded(event)
-        await listener._on_succeeded(event)
+        await dispatch(event)
+        await dispatch(event)
 
         entries = await store.all()
         assert entries[0].id != entries[1].id
@@ -79,9 +79,9 @@ class TestFailures:
             player_faction=3,
             current_date_time=_GAME_DATE,
         )
-        listener = SavefileListListener(store, now=lambda: _NOW)
+        _, dispatch = savefile_list_subscriptions(store, now=lambda: _NOW)[1]
 
-        await listener._on_failed(event)
+        await dispatch(event)
 
         entries = await store.all()
         assert len(entries) == 1
@@ -95,9 +95,9 @@ class TestFailures:
         self, store: DocumentStoreInMemory[SavefileLogEntry]
     ) -> None:
         event = SavefileProcessingFailed(reason="identity extraction failed")
-        listener = SavefileListListener(store, now=lambda: _NOW)
+        _, dispatch = savefile_list_subscriptions(store, now=lambda: _NOW)[1]
 
-        await listener._on_failed(event)
+        await dispatch(event)
 
         entries = await store.all()
         entry = entries[0]

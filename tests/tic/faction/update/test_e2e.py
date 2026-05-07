@@ -8,9 +8,8 @@ import pytest
 
 from tic._infra.bus_in_memory import MessageBusInMemory
 from tic._infra.event_store_in_memory import EventStoreInMemory
-from tic.faction.update.core import UpdateFactionHandler
 from tic.faction.update.events import FactionUpdated
-from tic.faction.update.shell import FactionUpdateListener
+from tic.faction.update.shell import faction_update_subscriptions
 from tic.shared.events.faction import FactionDataExtracted
 from tic.shared.models import Resources
 
@@ -46,16 +45,11 @@ _EXTRACTED = FactionDataExtracted(
 )
 
 
-def _runtime() -> tuple[MessageBusInMemory, FactionUpdateListener]:
+def _runtime() -> tuple[MessageBusInMemory, None]:
     bus = MessageBusInMemory()
     event_store = EventStoreInMemory()
-    listener = FactionUpdateListener(
-        bus=bus,
-        event_store=event_store,
-        handler=UpdateFactionHandler(),
-    )
-    bus.subscribe(*listener.subscriptions())
-    return bus, listener
+    bus.subscribe(*faction_update_subscriptions(bus, event_store))
+    return bus, None
 
 
 class TestFactionUpdateE2E:

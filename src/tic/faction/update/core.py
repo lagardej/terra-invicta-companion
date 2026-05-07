@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from tic.faction.update.events import FactionUpdated
-from tic.shared.command import CommandContext, CommandHandler
+from tic.shared.command import CommandContext
 from tic.shared.log_call import log_call
 from tic.shared.models import Resources
 
@@ -35,17 +35,13 @@ class FactionState:
     current_date_time: datetime | None
 
 
-class UpdateFactionHandler(CommandHandler[UpdateFaction, FactionUpdated, FactionState]):
-    """Produces a FactionUpdated domain event from an UpdateFaction command."""
-
-    @log_call()
-    async def handle(
-        self,
-        command: UpdateFaction,
-        context: CommandContext[FactionState],
-    ) -> FactionUpdated:
-        """Map the command payload to a FactionUpdated domain event."""
-        return _to_updated(command)
+@log_call()
+async def handle_update_faction(
+    command: UpdateFaction,
+    context: CommandContext[FactionState],
+) -> FactionUpdated:
+    """Map the command payload to a FactionUpdated domain event."""
+    return _to_updated(command)
 
 
 def _to_updated(command: UpdateFaction) -> FactionUpdated:

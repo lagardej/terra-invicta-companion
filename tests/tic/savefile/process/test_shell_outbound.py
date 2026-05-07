@@ -17,7 +17,7 @@ from tic.savefile.process.core._processor.campaign import (
 )
 from tic.savefile.process.core._processor.faction import ExtractedFactionData
 from tic.savefile.process.shell.outbound import (
-    SavefileProcessingPublisher,
+    savefile_processing_publisher_subscriptions,
 )
 from tic.shared.events.base import Message
 from tic.shared.events.campaign import CampaignDataExtracted, ScenarioCustomizations
@@ -108,7 +108,7 @@ class TestExtractedData:
     @pytest.mark.asyncio
     async def test_publishes_campaign_data_integration_event(self) -> None:
         bus = MessageBusInMemory()
-        publisher = SavefileProcessingPublisher(bus)
+        _, dispatch = savefile_processing_publisher_subscriptions(bus)[0]
         captured: list[CampaignDataExtracted] = []
 
         async def capture(event: Message) -> None:
@@ -118,9 +118,7 @@ class TestExtractedData:
         bus.subscribe(CampaignDataExtracted, capture)
 
         extracted = _campaign_data()
-        await publisher._on_campaign_data_extracted(
-            SavefileCampaignDataExtracted(data=extracted)
-        )
+        await dispatch(SavefileCampaignDataExtracted(data=extracted))
 
         assert len(captured) == 1
         event = captured[0]
@@ -131,7 +129,7 @@ class TestExtractedData:
     @pytest.mark.asyncio
     async def test_publishes_faction_data_integration_event(self) -> None:
         bus = MessageBusInMemory()
-        publisher = SavefileProcessingPublisher(bus)
+        _, dispatch = savefile_processing_publisher_subscriptions(bus)[1]
         captured: list[FactionDataExtracted] = []
 
         async def capture(event: Message) -> None:
@@ -141,9 +139,7 @@ class TestExtractedData:
         bus.subscribe(FactionDataExtracted, capture)
 
         extracted = _faction_data()
-        await publisher._on_faction_data_extracted(
-            SavefileFactionDataExtracted(data=extracted)
-        )
+        await dispatch(SavefileFactionDataExtracted(data=extracted))
 
         assert len(captured) == 1
         event = captured[0]
