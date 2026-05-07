@@ -18,6 +18,22 @@ from pathlib import Path
 
 
 @dataclass(frozen=True)
+class ChainPath:
+    """Linearized event chain path from a root trigger event."""
+
+    root_event: str
+    steps: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class LocalFlowGraph:
+    """Intra-file call graph with optional event-type guards."""
+
+    unconditional_calls: dict[str, set[str]]
+    guarded_calls: dict[tuple[str, str], set[str]]
+
+
+@dataclass(frozen=True)
 class Occurrence:
     """Single publish/listen occurrence found during AST scan."""
 
@@ -165,6 +181,15 @@ def _event_classes_from_file(file_path: Path, src_root: Path) -> list[EventClass
                     )
                 )
                 break
+            if base_ref == "Event":
+                result.append(
+                    EventClass(
+                        name=node.name,
+                        kind="Unknown",
+                        module=module,
+                    )
+                )
+                break
     return result
 
 
@@ -221,6 +246,17 @@ def _infer_function_event_refs(
     return {name: refs for name, refs in inferred.items() if refs}
 
 
+def _is_subscription_factory(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> bool:
+    """Heuristic for functions that define message-bus subscriptions."""
+    if "subscription" in node.name:
+        return True
+    if node.returns is None:
+        return False
+    return "Subscription" in _extract_type_names_from_annotation(node.returns)
+
+
 class _EventFlowVisitor(ast.NodeVisitor):
     def __init__(
         self,
@@ -231,6 +267,7 @@ class _EventFlowVisitor(ast.NodeVisitor):
         global_class_field_events: dict[str, dict[str, set[str]]],
         inferred_integration_events: set[str],
         function_event_refs: dict[str, set[str]],
+        function_event_refs_by_module_name: dict[tuple[str, str], set[str]],
     ) -> None:
         self.rel_path = rel_path
         self.known_events = known_events
@@ -246,11 +283,18 @@ class _EventFlowVisitor(ast.NodeVisitor):
         self._global_class_field_events = global_class_field_events
         self._inferred_integration_events = inferred_integration_events
         self._function_event_refs = function_event_refs
+        self._function_event_refs_by_module_name = function_event_refs_by_module_name
         self._imported_event_kinds: dict[str, set[str]] = {}
+        self._imported_function_event_refs: dict[str, set[str]] = {}
         self._module_aliases: dict[str, str] = {}
         self._class_handler_result_type: dict[str, dict[str, set[str]]] = defaultdict(
             dict
         )
+
+    def _function_refs_for_call(self, call_ref: str) -> set[str]:
+        refs = set(self._function_event_refs.get(call_ref, set()))
+        refs.update(self._imported_function_event_refs.get(call_ref, set()))
+        return refs
 
     def _event_kinds_for_ref(self, event_ref: str, node: ast.AST | None) -> set[str]:
         if event_ref in self._imported_event_kinds:
@@ -325,7 +369,9 @@ class _EventFlowVisitor(ast.NodeVisitor):
             ref = _extract_ref(node)
             if ref in self.known_events:
                 return {ref}
-            return set()
+            if ref is None:
+                return set()
+            return self._function_refs_for_call(ref)
         if isinstance(node, ast.Name):
             if node.id in self.known_events:
                 return {node.id}
@@ -346,6 +392,8 @@ class _EventFlowVisitor(ast.NodeVisitor):
                     )
                 if refs:
                     return refs
+                if node.attr in {"event", "status_event"}:
+                    return set(container_types)
             if node.attr in self.known_events:
                 return {node.attr}
             return set()
@@ -362,8 +410,11 @@ class _EventFlowVisitor(ast.NodeVisitor):
             if ref in self.known_events:
                 self._var_types[target.id] = {ref}
                 return
-            if ref in self._function_event_refs:
-                self._var_types[target.id] = set(self._function_event_refs[ref])
+            function_refs = set()
+            if ref is not None:
+                function_refs = self._function_refs_for_call(ref)
+            if function_refs:
+                self._var_types[target.id] = function_refs
                 return
             if (
                 isinstance(value.func, ast.Attribute)
@@ -493,6 +544,11 @@ class _EventFlowVisitor(ast.NodeVisitor):
                 kinds = self._event_kinds_by_module_name.get((node.module, alias.name))
                 if kinds:
                     self._imported_event_kinds[local_name] = set(kinds)
+                function_refs = self._function_event_refs_by_module_name.get(
+                    (node.module, alias.name)
+                )
+                if function_refs:
+                    self._imported_function_event_refs[local_name] = set(function_refs)
         self.generic_visit(node)
 
     def visit_Import(self, node: ast.Import) -> None:  # noqa: N802
@@ -527,6 +583,29 @@ class _EventFlowVisitor(ast.NodeVisitor):
         self._current_class = previous_class
         self._var_types = previous_vars
 
+    def _bind_match_pattern(self, pattern: ast.pattern, refs: set[str]) -> None:
+        if isinstance(pattern, ast.MatchAs) and pattern.name is not None:
+            self._var_types[pattern.name] = set(refs)
+            return
+        if isinstance(pattern, ast.MatchStar) and pattern.name is not None:
+            self._var_types[pattern.name] = set(refs)
+            return
+        if isinstance(pattern, ast.MatchSequence):
+            for child in pattern.patterns:
+                self._bind_match_pattern(child, refs)
+            return
+        if isinstance(pattern, ast.MatchClass):
+            for child in pattern.patterns:
+                self._bind_match_pattern(child, refs)
+            for child in pattern.kwd_patterns:
+                self._bind_match_pattern(child, refs)
+
+    def visit_Match(self, node: ast.Match) -> None:  # noqa: N802
+        subject_refs = self._event_refs_from_expr(node.subject)
+        for case in node.cases:
+            self._bind_match_pattern(case.pattern, subject_refs)
+        self.generic_visit(node)
+
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
         self._visit_subscriptions_return(node)
         self._function_stack.append(node.name)
@@ -542,7 +621,7 @@ class _EventFlowVisitor(ast.NodeVisitor):
     def _visit_subscriptions_return(
         self, node: ast.FunctionDef | ast.AsyncFunctionDef
     ) -> None:
-        if node.name != "subscriptions":
+        if not _is_subscription_factory(node):
             return
         for subnode in ast.walk(node):
             if isinstance(subnode, ast.Return) and subnode.value is not None:
@@ -574,8 +653,265 @@ def _group_by_event(
     return dict(sorted(grouped.items(), key=lambda kv: (kv[0][1], kv[0][0].lower())))
 
 
+def _extract_handler_ref(detail: str) -> str | None:
+    marker = "->"
+    if marker not in detail:
+        return None
+    return detail.split(marker, 1)[1].strip()
+
+
+class _LocalCallGraphVisitor(ast.NodeVisitor):
+    def __init__(self) -> None:
+        self.calls: dict[str, set[str]] = defaultdict(set)
+        self.calls_by_event: dict[tuple[str, str], set[str]] = defaultdict(set)
+        self._class_stack: list[str] = []
+        self._function_stack: list[str] = []
+        self._function_args_stack: list[set[str]] = []
+        self._event_guard_stack: list[set[str] | None] = []
+
+    def _current_function(self) -> str | None:
+        if not self._function_stack:
+            return None
+        function_name = self._function_stack[-1]
+        if self._class_stack:
+            return f"{self._class_stack[-1]}.{function_name}"
+        return function_name
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:  # noqa: N802
+        self._class_stack.append(node.name)
+        self.generic_visit(node)
+        self._class_stack.pop()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
+        self._function_stack.append(node.name)
+        args = {arg.arg for arg in node.args.args}
+        self._function_args_stack.append(args)
+        self._event_guard_stack.append(None)
+        self.generic_visit(node)
+        self._event_guard_stack.pop()
+        self._function_args_stack.pop()
+        self._function_stack.pop()
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:  # noqa: N802
+        self._function_stack.append(node.name)
+        args = {arg.arg for arg in node.args.args}
+        self._function_args_stack.append(args)
+        self._event_guard_stack.append(None)
+        self.generic_visit(node)
+        self._event_guard_stack.pop()
+        self._function_args_stack.pop()
+        self._function_stack.pop()
+
+    def _pattern_event_refs(self, pattern: ast.pattern) -> set[str]:
+        refs: set[str] = set()
+        if isinstance(pattern, ast.MatchClass):
+            ref = _extract_ref(pattern.cls)
+            if ref is not None:
+                refs.add(ref)
+            for child in pattern.patterns:
+                refs.update(self._pattern_event_refs(child))
+            for child in pattern.kwd_patterns:
+                refs.update(self._pattern_event_refs(child))
+            return refs
+        if isinstance(pattern, ast.MatchOr):
+            for child in pattern.patterns:
+                refs.update(self._pattern_event_refs(child))
+            return refs
+        if isinstance(pattern, ast.MatchAs) and pattern.pattern is not None:
+            refs.update(self._pattern_event_refs(pattern.pattern))
+            return refs
+        if isinstance(pattern, ast.MatchSequence):
+            for child in pattern.patterns:
+                refs.update(self._pattern_event_refs(child))
+            return refs
+        return refs
+
+    def _merge_guard(self, refs: set[str]) -> set[str] | None:
+        current = self._event_guard_stack[-1] if self._event_guard_stack else None
+        if current is None:
+            return refs or None
+        if not refs:
+            return set(current)
+        intersected = current & refs
+        return intersected or None
+
+    def visit_Match(self, node: ast.Match) -> None:  # noqa: N802
+        subject = node.subject
+        is_event_subject = (
+            isinstance(subject, ast.Name)
+            and self._function_args_stack
+            and subject.id in self._function_args_stack[-1]
+        )
+        if not is_event_subject:
+            self.generic_visit(node)
+            return
+
+        self.visit(node.subject)
+        for case in node.cases:
+            refs = self._pattern_event_refs(case.pattern)
+            merged_guard = self._merge_guard(refs)
+            self._event_guard_stack.append(merged_guard)
+            if case.guard is not None:
+                self.visit(case.guard)
+            for stmt in case.body:
+                self.visit(stmt)
+            self._event_guard_stack.pop()
+
+    def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
+        caller = self._current_function()
+        if caller is not None:
+            callee: str | None = None
+            if isinstance(node.func, ast.Name):
+                callee = node.func.id
+            elif (
+                isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "self"
+                and self._class_stack
+            ):
+                callee = f"{self._class_stack[-1]}.{node.func.attr}"
+            if callee is not None:
+                guard = self._event_guard_stack[-1] if self._event_guard_stack else None
+                if guard:
+                    for event_name in guard:
+                        self.calls_by_event[(caller, event_name)].add(callee)
+                else:
+                    self.calls[caller].add(callee)
+        self.generic_visit(node)
+
+
+def _build_local_call_graphs(
+    all_files: list[Path],
+    src_root: Path,
+) -> dict[str, LocalFlowGraph]:
+    graphs: dict[str, LocalFlowGraph] = {}
+    for file_path in all_files:
+        tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
+        rel_path = file_path.relative_to(src_root.parent).as_posix()
+        visitor = _LocalCallGraphVisitor()
+        visitor.visit(tree)
+        graphs[rel_path] = LocalFlowGraph(
+            unconditional_calls={k: set(v) for k, v in visitor.calls.items()},
+            guarded_calls={k: set(v) for k, v in visitor.calls_by_event.items()},
+        )
+    return graphs
+
+
+def _reachable_callers(
+    graph: LocalFlowGraph,
+    start: str,
+    event_name: str,
+) -> set[str]:
+    seen: set[str] = set()
+    stack = [start]
+    while stack:
+        caller = stack.pop()
+        if caller in seen:
+            continue
+        seen.add(caller)
+        for callee in graph.unconditional_calls.get(caller, set()):
+            if callee not in seen:
+                stack.append(callee)
+        for callee in graph.guarded_calls.get((caller, event_name), set()):
+            if callee not in seen:
+                stack.append(callee)
+    return seen
+
+
+def _build_event_chains(
+    publishes: list[Occurrence],
+    listens: list[Occurrence],
+    local_call_graphs: dict[str, LocalFlowGraph],
+    roots: tuple[str, ...] = ("SavefileChangeDetected",),
+) -> list[ChainPath]:
+    publishes_by_file_caller: dict[tuple[str, str], list[Occurrence]] = defaultdict(
+        list
+    )
+    for item in publishes:
+        if item.caller is None:
+            continue
+        publishes_by_file_caller[(item.file, item.caller)].append(item)
+
+    listens_by_event: dict[str, list[Occurrence]] = defaultdict(list)
+    for item in listens:
+        listens_by_event[item.event_name].append(item)
+
+    result: list[ChainPath] = []
+
+    def source_link(item: Occurrence) -> str:
+        return f"[{item.file}:{item.line}](../{item.file})"
+
+    def walk(event_name: str, steps: tuple[str, ...], visited: set[str]) -> None:
+        listeners = sorted(
+            listens_by_event.get(event_name, []),
+            key=lambda x: (x.file, x.line),
+        )
+        if not listeners:
+            result.append(ChainPath(root_event=steps[0], steps=steps))
+            return
+
+        expanded_any = False
+        for listen in listeners:
+            handler = _extract_handler_ref(listen.detail)
+            if handler is None:
+                continue
+
+            graph = local_call_graphs.get(
+                listen.file,
+                LocalFlowGraph(unconditional_calls={}, guarded_calls={}),
+            )
+            reachable = _reachable_callers(graph, handler, event_name)
+
+            produced: list[Occurrence] = []
+            for caller in sorted(reachable):
+                produced.extend(publishes_by_file_caller.get((listen.file, caller), []))
+            produced = sorted(produced, key=lambda x: (x.file, x.line, x.event_name))
+
+            handler_step = f"{handler} @ {source_link(listen)}"
+            if not produced:
+                result.append(
+                    ChainPath(
+                        root_event=steps[0],
+                        steps=steps + (handler_step,),
+                    )
+                )
+                expanded_any = True
+                continue
+
+            for publish in produced:
+                publish_step = f"{publish.event_name} @ {source_link(publish)}"
+                next_steps = steps + (handler_step, publish_step)
+                if publish.event_name in visited:
+                    result.append(
+                        ChainPath(
+                            root_event=steps[0],
+                            steps=next_steps + ("(cycle detected)",),
+                        )
+                    )
+                    expanded_any = True
+                    continue
+                walk(
+                    publish.event_name,
+                    next_steps,
+                    visited | {publish.event_name},
+                )
+                expanded_any = True
+
+        if not expanded_any:
+            result.append(ChainPath(root_event=steps[0], steps=steps))
+
+    for root in roots:
+        has_publish = root in {p.event_name for p in publishes}
+        if root not in listens_by_event and not has_publish:
+            continue
+        walk(root, (root,), {root})
+
+    return result
+
+
 def _format_report(
     grouped: dict[tuple[str, str], dict[str, list[Occurrence]]],
+    chains: list[ChainPath],
 ) -> str:
     def _source_link(item: Occurrence) -> str:
         target = f"../{item.file}"
@@ -634,20 +970,33 @@ def _format_report(
 
         lines.append("")
 
+    if chains:
+        lines.append("## Event Chains")
+        lines.append("")
+        by_root: dict[str, list[ChainPath]] = defaultdict(list)
+        for chain in chains:
+            by_root[chain.root_event].append(chain)
+
+        for root_event in sorted(by_root):
+            lines.append(f"### From {root_event}")
+            lines.append("")
+            for chain in sorted(by_root[root_event], key=lambda c: c.steps):
+                lines.append(f"- {chain.steps[0]}")
+                for depth, step in enumerate(chain.steps[1:], start=1):
+                    indent = "  " * depth
+                    lines.append(f"{indent}- {step}")
+                lines.append("")
+            lines.append("")
+
     return "\n".join(lines)
 
 
 def map_event_flow(src_root: Path, out_path: Path) -> Path:  # noqa: C901
     """Inspect source files and write a markdown map of event flow."""
     all_files = _collect_python_files(src_root)
-    event_files = [
-        p
-        for p in all_files
-        if "/events/" in p.as_posix() or p.as_posix().endswith("/events.py")
-    ]
     event_kinds_by_name: dict[str, set[str]] = defaultdict(set)
     event_kinds_by_module_name: dict[tuple[str, str], set[str]] = defaultdict(set)
-    for file_path in event_files:
+    for file_path in all_files:
         for event_class in _event_classes_from_file(file_path, src_root):
             event_kinds_by_name[event_class.name].add(event_class.kind)
             event_kinds_by_module_name[(event_class.module, event_class.name)].add(
@@ -663,8 +1012,13 @@ def map_event_flow(src_root: Path, out_path: Path) -> Path:  # noqa: C901
         )
 
     global_class_field_events: dict[str, dict[str, set[str]]] = defaultdict(dict)
+    function_event_refs_by_module_name: dict[tuple[str, str], set[str]] = {}
     for file_path in all_files:
         tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
+        module = _module_path_for_file(file_path, src_root)
+        inferred_function_refs = _infer_function_event_refs(tree, known_events)
+        for function_name, refs in inferred_function_refs.items():
+            function_event_refs_by_module_name[(module, function_name)] = set(refs)
         for node in ast.walk(tree):
             if not isinstance(node, ast.ClassDef):
                 continue
@@ -682,6 +1036,7 @@ def map_event_flow(src_root: Path, out_path: Path) -> Path:  # noqa: C901
 
     publishes: list[Occurrence] = []
     listens: list[Occurrence] = []
+    local_call_graphs = _build_local_call_graphs(all_files, src_root)
 
     for file_path in all_files:
         tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
@@ -695,14 +1050,16 @@ def map_event_flow(src_root: Path, out_path: Path) -> Path:  # noqa: C901
             global_class_field_events=global_class_field_events,
             inferred_integration_events=inferred_integration_events,
             function_event_refs=function_event_refs,
+            function_event_refs_by_module_name=function_event_refs_by_module_name,
         )
         visitor.visit(tree)
         publishes.extend(visitor.publishes)
         listens.extend(visitor.listens)
 
     grouped = _group_by_event(publishes, listens)
+    chains = _build_event_chains(publishes, listens, local_call_graphs)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(_format_report(grouped), encoding="utf-8")
+    out_path.write_text(_format_report(grouped, chains), encoding="utf-8")
     return out_path
 
 
