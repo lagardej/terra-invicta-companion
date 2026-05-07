@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import pytest
 
 from tests.tic.conftest import E2ERuntime, E2ERuntimeBuilder
-from tic.faction.update.events import FactionUpdated
+from tic.faction.events import FactionUpdated
 from tic.faction.update.shell import faction_update_subscriptions
 from tic.shared.events.faction import FactionDataExtracted
 from tic.shared.models import Resources
