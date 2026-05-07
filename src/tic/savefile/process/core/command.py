@@ -10,16 +10,11 @@ from functools import reduce
 
 from returns.result import Failure, Result, Success
 
-from tic.savefile._events import (
-    SavefileProcessingSucceeded,
-)
-from tic.savefile.process.core._processor.campaign import (
+from tic.savefile._events import SavefileProcessingSucceeded
+from tic.savefile.process.core._processor import process_campaign, process_factions
+from tic.savefile.process.core.extracted_data import (
     ExtractedCampaignData,
-    process_campaign,
-)
-from tic.savefile.process.core._processor.faction import (
     ExtractedFactionData,
-    process_factions,
 )
 from tic.savefile.process.core.identity import Identity
 from tic.savefile.process.core.validation import ValidationFailure

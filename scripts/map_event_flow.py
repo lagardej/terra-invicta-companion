@@ -622,8 +622,14 @@ def _format_report(
             publishes = sorted(buckets["publishes"], key=lambda x: (x.file, x.line))
             listens = sorted(buckets["listens"], key=lambda x: (x.file, x.line))
 
-            pub_cell = "<br>".join(_publish_cell(p) for p in publishes) if publishes else ""
-            lst_cell = "<br>".join(_listen_cell(l) for l in listens) if listens else ""
+            pub_cell = (
+                "<br>".join(_publish_cell(p) for p in publishes) if publishes else ""
+            )
+            lst_cell = (
+                "<br>".join(_listen_cell(listen) for listen in listens)
+                if listens
+                else ""
+            )
             lines.append(f"| **{event_name}** | {pub_cell} | {lst_cell} |")
 
         lines.append("")

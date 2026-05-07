@@ -18,15 +18,15 @@ from tic.savefile._events import (
     SavefileProcessingFailed,
     SavefileProcessingSucceeded,
 )
-from tic.savefile.process.core._processor.campaign import (
-    ExtractedCampaignData,
-)
-from tic.savefile.process.core._processor.campaign import (
-    ScenarioCustomizations as ExtractedScenarioCustomizations,
-)
 from tic.savefile.process.core.command import (
     ProcessResult,
     SavefileState,
+)
+from tic.savefile.process.core.extracted_data import (
+    ExtractedCampaignData,
+)
+from tic.savefile.process.core.extracted_data import (
+    ScenarioCustomizations as ExtractedScenarioCustomizations,
 )
 from tic.savefile.process.core.identity import Identity
 from tic.savefile.process.shell.inbound import savefile_process_subscriptions

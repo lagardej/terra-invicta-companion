@@ -3,8 +3,10 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from tic.savefile.process.core._processor.campaign import ExtractedCampaignData
-from tic.savefile.process.core._processor.faction import ExtractedFactionData
+from tic.savefile.process.core.extracted_data import (
+    ExtractedCampaignData,
+    ExtractedFactionData,
+)
 from tic.shared.events.base import DomainEvent, Event
 
 

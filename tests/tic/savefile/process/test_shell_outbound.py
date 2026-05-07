@@ -11,11 +11,13 @@ from tic.savefile._events import (
     SavefileCampaignDataExtracted,
     SavefileFactionDataExtracted,
 )
-from tic.savefile.process.core._processor.campaign import ExtractedCampaignData
-from tic.savefile.process.core._processor.campaign import (
+from tic.savefile.process.core.extracted_data import (
+    ExtractedCampaignData,
+    ExtractedFactionData,
+)
+from tic.savefile.process.core.extracted_data import (
     ScenarioCustomizations as ExtractedScenarioCustomizations,
 )
-from tic.savefile.process.core._processor.faction import ExtractedFactionData
 from tic.savefile.process.shell.outbound import (
     savefile_processing_publisher_subscriptions,
 )

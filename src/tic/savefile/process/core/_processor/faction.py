@@ -2,36 +2,19 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
 
 import cattr
 from pydantic import AliasChoices, BaseModel, Field
 from returns.result import Failure, Result
 
+from tic.savefile.process.core.extracted_data import ExtractedFactionData
 from tic.savefile.process.core.validation import ValidationFailure, validate_input
 from tic.shared.log_call import log_call
 from tic.shared.models import Resources
 
 _CONVERTER = cattr.Converter()
 _CONVERTER.register_structure_hook(tuple, lambda v, t: tuple(v))
-
-
-@dataclass(frozen=True)
-class ExtractedFactionData:
-    """Raw faction data extracted from a savefile."""
-
-    id: int
-    abductions: int
-    armies: tuple[int, ...]
-    atrocities: int
-    councilors: tuple[int, ...]
-    current_date_time: datetime
-    fleets: tuple[int, ...]
-    is_ai: bool
-    mission_control_usage: int
-    template_name: str
-    resources: Resources
 
 
 @log_call()

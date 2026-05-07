@@ -6,8 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from tic._infra.bus_in_memory import MessageBusInMemory
-from tic._infra.event_store_in_memory import EventStoreInMemory
+from tests.tic.conftest import E2ERuntime, E2ERuntimeBuilder
 from tic.faction.update.events import FactionUpdated
 from tic.faction.update.shell import faction_update_subscriptions
 from tic.shared.events.faction import FactionDataExtracted
@@ -45,25 +44,19 @@ _EXTRACTED = FactionDataExtracted(
 )
 
 
-def _runtime() -> tuple[MessageBusInMemory, None]:
-    bus = MessageBusInMemory()
-    event_store = EventStoreInMemory()
-    bus.subscribe(*faction_update_subscriptions(bus, event_store))
-    return bus, None
-
-
 class TestFactionUpdateE2E:
     @pytest.mark.asyncio
-    async def test_faction_updated_published_on_bus(self) -> None:
-        bus, _ = _runtime()
-        published: list[object] = []
+    async def test_faction_updated_published_on_bus(
+        self,
+        e2e_runtime_builder: E2ERuntimeBuilder,
+    ) -> None:
+        runtime: E2ERuntime = e2e_runtime_builder(
+            subscription_factories=(faction_update_subscriptions,),
+            capture_event_types=(FactionUpdated,),
+        )
 
-        async def capture(event: object) -> None:
-            published.append(event)
+        await runtime.bus.publish(_EXTRACTED)
 
-        bus.subscribe(FactionUpdated, capture)
-
-        await bus.publish(_EXTRACTED)
-
+        published = runtime.captured(FactionUpdated)
         assert len(published) == 1
         assert isinstance(published[0], FactionUpdated)

@@ -10,7 +10,6 @@ from returns.result import Failure, Result, Success
 from tic.savefile._events import (
     SavefileProcessingSucceeded,
 )
-from tic.savefile.process.core._processor.campaign import ExtractedCampaignData
 from tic.savefile.process.core.command import (
     AlreadyProcessedFailure,
     ProcessingFailure,
@@ -19,6 +18,7 @@ from tic.savefile.process.core.command import (
     SavefileState,
     handle_process_savefile,
 )
+from tic.savefile.process.core.extracted_data import ExtractedCampaignData
 from tic.savefile.process.core.identity import Identity
 from tic.shared.command import CommandContext
 

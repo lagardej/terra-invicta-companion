@@ -2,6 +2,39 @@
 
 from __future__ import annotations
 
+import pytest
+
+from tests.tic.conftest import E2ERuntimeBuilder
+from tic.savefile._events import (
+    SavefileIdentityExtractionFailed,
+    SavefileProcessingFailed,
+    SavefileProcessingSucceeded,
+)
+from tic.savefile.process.shell.inbound import savefile_process_subscriptions
+from tic.savefile.process.shell.outbound import (
+    savefile_processing_publisher_subscriptions,
+)
+from tic.shared.events.campaign import CampaignDataExtracted
+from tic.shared.events.faction import FactionDataExtracted
+
+
+@pytest.fixture
+def savefile_process_runtime(e2e_runtime_builder: E2ERuntimeBuilder) -> object:
+    """Return savefile process runtime built from shared e2e plumbing."""
+    return e2e_runtime_builder(
+        subscription_factories=(
+            savefile_process_subscriptions,
+            savefile_processing_publisher_subscriptions,
+        ),
+        capture_event_types=(
+            SavefileProcessingSucceeded,
+            SavefileProcessingFailed,
+            SavefileIdentityExtractionFailed,
+            CampaignDataExtracted,
+            FactionDataExtracted,
+        ),
+    )
+
 
 def scenario_customizations_dict() -> dict:
     """Minimal scenario customizations matching campaign processor expectations."""

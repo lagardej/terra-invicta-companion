@@ -6,8 +6,10 @@ from tic.savefile._events import (
     SavefileCampaignDataExtracted,
     SavefileFactionDataExtracted,
 )
-from tic.savefile.process.core._processor.campaign import ExtractedCampaignData
-from tic.savefile.process.core._processor.faction import ExtractedFactionData
+from tic.savefile.process.core.extracted_data import (
+    ExtractedCampaignData,
+    ExtractedFactionData,
+)
 from tic.shared.events.base import Message
 from tic.shared.events.campaign import CampaignDataExtracted, ScenarioCustomizations
 from tic.shared.events.faction import FactionDataExtracted

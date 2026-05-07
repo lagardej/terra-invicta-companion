@@ -16,8 +16,6 @@ from tic.savefile._events import (
     SavefileProcessingFailed,
     SavefileProcessingSucceeded,
 )
-from tic.savefile.process.core._processor.campaign import ExtractedCampaignData
-from tic.savefile.process.core._processor.faction import ExtractedFactionData
 from tic.savefile.process.core.command import (
     AlreadyProcessedFailure,
     DataProcessingFailure,
@@ -26,6 +24,10 @@ from tic.savefile.process.core.command import (
     ProcessSavefile,
     SavefileState,
     handle_process_savefile,
+)
+from tic.savefile.process.core.extracted_data import (
+    ExtractedCampaignData,
+    ExtractedFactionData,
 )
 from tic.savefile.process.core.identity import (
     Identity,
