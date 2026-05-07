@@ -23,7 +23,7 @@ from tic.savefile.process.core._processor.faction import (
 )
 from tic.savefile.process.core.identity import Identity
 from tic.savefile.process.core.validation import ValidationFailure
-from tic.shared.command import CommandContext, CommandHandler
+from tic.shared.command import CommandContext
 from tic.shared.log_call import log_call
 
 # — Type aliases
@@ -93,47 +93,40 @@ type _Processor = Callable[
 # — Handler implementation (functional core orchestrator)
 
 
-class ProcessSavefileHandler(
-    CommandHandler[
-        ProcessSavefile, Result[ProcessResult, ProcessingFailure], SavefileState
-    ]
-):
-    """Command handler contract implementation for savefile processing."""
+_processors: list[_Processor] = [
+    process_campaign,
+    process_factions,
+]
 
-    processors: list[_Processor] = [
-        process_campaign,
-        process_factions,
-    ]
 
-    @log_call()
-    async def handle(
-        self,
-        command: ProcessSavefile,
-        context: CommandContext[SavefileState],
-    ) -> Result[ProcessResult, ProcessingFailure]:
-        """Run scoped processors against raw savefile data.
+@log_call()
+async def handle_process_savefile(
+    command: ProcessSavefile,
+    context: CommandContext[SavefileState],
+) -> Result[ProcessResult, ProcessingFailure]:
+    """Run scoped processors against raw savefile data.
 
-        Returns Success[ProcessResult] when all processors succeed.
-        Returns Failure[ProcessingFailure] for domain invariant violations or
-        processor failures.
-        """
-        identity = command.identity
-        current_date_time = command.current_date_time
+    Returns Success[ProcessResult] when all processors succeed.
+    Returns Failure[ProcessingFailure] for domain invariant violations or
+    processor failures.
+    """
+    identity = command.identity
+    current_date_time = command.current_date_time
 
-        if _is_already_processed(current_date_time, context.state):
-            return Failure(AlreadyProcessedFailure())
+    if _is_already_processed(current_date_time, context.state):
+        return Failure(AlreadyProcessedFailure())
 
-        t0 = time.perf_counter()
-        process_result = _process(self.processors, command.data, current_date_time)
-        elapsed_ms = int(round((time.perf_counter() - t0) * 1000))
+    t0 = time.perf_counter()
+    process_result = _process(_processors, command.data, current_date_time)
+    elapsed_ms = int(round((time.perf_counter() - t0) * 1000))
 
-        match process_result:
-            case Success(extracted):
-                return _to_success(identity, current_date_time, extracted, elapsed_ms)
-            case Failure(data_failure):
-                return Failure(data_failure)
-            case _ as unreachable:
-                raise AssertionError(f"Unexpected result: {unreachable}")
+    match process_result:
+        case Success(extracted):
+            return _to_success(identity, current_date_time, extracted, elapsed_ms)
+        case Failure(data_failure):
+            return Failure(data_failure)
+        case _ as unreachable:
+            raise AssertionError(f"Unexpected result: {unreachable}")
 
 
 def _process(

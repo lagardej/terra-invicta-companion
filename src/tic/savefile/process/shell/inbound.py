@@ -7,7 +7,7 @@ import json
 from collections.abc import Sequence
 from datetime import datetime
 
-from returns.result import Failure, Result, Success
+from returns.result import Failure, Success
 
 from tic.savefile._events import (
     SavefileCampaignDataExtracted,
@@ -26,12 +26,13 @@ from tic.savefile.process.core.command import (
     ProcessResult,
     ProcessSavefile,
     SavefileState,
+    handle_process_savefile,
 )
 from tic.savefile.process.core.identity import (
     Identity,
     extract_identity_and_current_date_time,
 )
-from tic.shared.command import CommandContext, CommandHandler
+from tic.shared.command import CommandContext
 from tic.shared.event_store import EventFilter, EventStore
 from tic.shared.event_subscriber import EventSubscriber, Subscription
 from tic.shared.events.base import DomainEvent, Message
@@ -47,14 +48,10 @@ class SavefileProcess(EventSubscriber):
         self,
         bus: MessageBus,
         event_store: EventStore,
-        handler: CommandHandler[
-            ProcessSavefile, Result[ProcessResult, ProcessingFailure], SavefileState
-        ],
     ) -> None:
         """Initialise with required infrastructure."""
         self._bus = bus
         self._event_store = event_store
-        self._handler = handler
 
     def subscriptions(self) -> tuple[Subscription, ...]:
         """Return subscription entries for this module."""
@@ -80,7 +77,7 @@ class SavefileProcess(EventSubscriber):
         event_filter = _event_filter(identity)
         context, expected_max_sequence = await self._load_context(event_filter)
 
-        result = await self._handler.handle(command, context)
+        result = await handle_process_savefile(command, context)
 
         match result:
             case Failure(failure_value):

@@ -16,8 +16,8 @@ from tic.savefile.process.core.command import (
     ProcessingFailure,
     ProcessResult,
     ProcessSavefile,
-    ProcessSavefileHandler,
     SavefileState,
+    handle_process_savefile,
 )
 from tic.savefile.process.core.identity import Identity
 from tic.shared.command import CommandContext
@@ -52,7 +52,7 @@ async def _handle(
     command: ProcessSavefile,
     context: CommandContext[SavefileState],
 ) -> Result[ProcessResult, ProcessingFailure]:
-    return await ProcessSavefileHandler().handle(command, context)
+    return await handle_process_savefile(command, context)
 
 
 class TestSuccessPath:
