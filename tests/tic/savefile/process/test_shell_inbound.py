@@ -29,7 +29,7 @@ from tic.savefile.process.core.extracted_data import (
     ScenarioCustomizations as ExtractedScenarioCustomizations,
 )
 from tic.savefile.process.core.identity import Identity
-from tic.savefile.process.shell.inbound import savefile_process_subscriptions
+from tic.savefile.process.shell.inbound import SavefileProcessSubscriber
 from tic.shared.event_store import EventFilter
 from tic.shared.events.base import Message
 from tic.shared.events.savefile import SavefileChangeDetected
@@ -109,7 +109,9 @@ class TestSuccessPath:
         mock_handle = AsyncMock(return_value=Success(process_result))
         bus = MessageBusInMemory()
         event_store = EventStoreInMemory()
-        _, on_savefile_detected = savefile_process_subscriptions(bus, event_store)[0]
+        _, on_savefile_detected = SavefileProcessSubscriber(
+            bus, event_store
+        ).subscriptions()[0]
         published_domain_events: list[Message] = []
 
         async def capture_domain_event(event: Message) -> None:
@@ -159,7 +161,9 @@ class TestFailures:
         mock_handle = AsyncMock()
         bus = MessageBusInMemory()
         event_store = EventStoreInMemory()
-        _, on_savefile_detected = savefile_process_subscriptions(bus, event_store)[0]
+        _, on_savefile_detected = SavefileProcessSubscriber(
+            bus, event_store
+        ).subscriptions()[0]
         published_events: list[Message] = []
 
         async def capture_failure(event: Message) -> None:

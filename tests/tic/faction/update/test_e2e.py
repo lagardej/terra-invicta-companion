@@ -8,8 +8,10 @@ import pytest
 
 from tests.tic.conftest import E2ERuntime, E2ERuntimeBuilder
 from tic.faction._events import FactionUpdated
-from tic.faction.update.shell import faction_update_subscriptions
+from tic.faction.update.shell import FactionUpdateSubscriber
+from tic.shared.event_store import EventStore
 from tic.shared.events.faction import FactionDataExtracted
+from tic.shared.message_bus import MessageBus, Subscription
 from tic.shared.models import Resources
 
 pytestmark = pytest.mark.e2e
@@ -50,8 +52,14 @@ class TestFactionUpdateE2E:
         self,
         e2e_runtime_builder: E2ERuntimeBuilder,
     ) -> None:
+        def subscriptions(
+            bus: MessageBus,
+            event_store: EventStore,
+        ) -> tuple[Subscription, ...]:
+            return FactionUpdateSubscriber(bus, event_store).subscriptions()
+
         runtime: E2ERuntime = e2e_runtime_builder(
-            subscription_factories=(faction_update_subscriptions,),
+            subscription_factories=(subscriptions,),
             capture_event_types=(FactionUpdated,),
         )
 

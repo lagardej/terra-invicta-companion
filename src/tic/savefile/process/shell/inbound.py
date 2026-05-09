@@ -41,16 +41,22 @@ from tic.shared.log_call import log_call
 from tic.shared.message_bus import MessageBus, Subscription
 
 
-def savefile_process_subscriptions(
-    bus: MessageBus,
-    event_store: EventStore,
-) -> tuple[Subscription, ...]:
-    """Return subscriptions for savefile change processing."""
+class SavefileProcessSubscriber:
+    """Subscribe to savefile change events and coordinate processing."""
+
+    def __init__(self, bus: MessageBus, event_store: EventStore) -> None:
+        """Store dependencies used by the savefile inbound handler."""
+        self._bus = bus
+        self._event_store = event_store
+
+    def subscriptions(self) -> tuple[Subscription, ...]:
+        """Return subscriptions for savefile change processing."""
+        return ((SavefileChangeDetected, self._on_savefile_detected),)
 
     @log_call()
-    async def _on_savefile_detected(event: Message) -> None:
+    async def _on_savefile_detected(self, event: Message) -> None:
         assert isinstance(event, SavefileChangeDetected)
-        data = _load(event)
+        data = _load_file(event)
 
         identity_and_time_result = extract_identity_and_current_date_time(data)
         if isinstance(identity_and_time_result, Failure):
@@ -58,14 +64,14 @@ def savefile_process_subscriptions(
             # Not persisted because it is not attachable to a savefile identity.
             vf = identity_and_time_result.failure()
             reason = "; ".join(vf.violations)
-            await bus.publish(SavefileIdentityExtractionFailed(reason=reason))
+            await self._bus.publish(SavefileIdentityExtractionFailed(reason=reason))
             return
 
         identity, current_date_time = identity_and_time_result.unwrap()
         command = ProcessSavefile(data, identity, current_date_time)
 
         event_filter = _event_filter(identity)
-        query_result = await event_store.query(event_filter)
+        query_result = await self._event_store.query(event_filter)
         context = CommandContext(state=_fold_state(query_result.events))
         expected_max_sequence = query_result.max_sequence
 
@@ -77,25 +83,23 @@ def savefile_process_subscriptions(
                 domain_event: DomainEvent = _to_failure_event(
                     failure_value, identity, current_date_time
                 )
-                await event_store.append(
+                await self._event_store.append(
                     event_filter, expected_max_sequence, domain_event
                 )
-                await bus.publish(domain_event)
+                await self._bus.publish(domain_event)
             case Success(process_result):
                 # All processors succeeded
-                await event_store.append(
+                await self._event_store.append(
                     event_filter, expected_max_sequence, process_result.status_event
                 )
-                await bus.publish(process_result.status_event)
+                await self._bus.publish(process_result.status_event)
                 coordination = _to_coordination_events(process_result.extracted_data)
-                await bus.publish(*coordination)
+                await self._bus.publish(*coordination)
             case _ as unreachable:
                 raise AssertionError(f"Unexpected result: {unreachable}")
 
-    return ((SavefileChangeDetected, _on_savefile_detected),)
 
-
-def _load(event: SavefileChangeDetected) -> dict:
+def _load_file(event: SavefileChangeDetected) -> dict:
     path = event.path
     opener = gzip.open if path.suffix == ".gz" else open
     with opener(path, "rb") as fh:

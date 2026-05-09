@@ -26,22 +26,34 @@ from tic.shared.message_bus import Subscription
 _TEMPLATES_DIR = Path(__file__).parents[4] / "templates"
 
 
-def savefile_list_subscriptions(
-    store: DocumentStore[SavefileLogEntry],
-    now: Callable[[], datetime] | None = None,
-) -> tuple[Subscription, ...]:
-    """Return subscriptions for projecting savefile processing events into the log."""
-    _now = _utcnow if now is None else now
+class SavefileListSubscriber:
+    """Project savefile processing events into the savefile log store."""
 
-    async def _dispatch(event: Message) -> None:
+    def __init__(
+        self,
+        store: DocumentStore[SavefileLogEntry],
+        now: Callable[[], datetime] | None = None,
+    ) -> None:
+        """Store dependencies used by the savefile list shell."""
+        self._store = store
+        self._now = _utcnow if now is None else now
+
+    def subscriptions(self) -> tuple[Subscription, ...]:
+        """Return subscriptions for projecting processing events into the log."""
+        return (
+            (SavefileProcessingSucceeded, self._dispatch),
+            (SavefileProcessingFailed, self._dispatch),
+        )
+
+    async def _dispatch(self, event: Message) -> None:
         match event:
             case SavefileProcessingSucceeded() as e:
-                await _on_succeeded(e)
+                await self._on_succeeded(e)
             case SavefileProcessingFailed() as e:
-                await _on_failed(e)
+                await self._on_failed(e)
 
     @log_call()
-    async def _on_succeeded(event: SavefileProcessingSucceeded) -> None:
+    async def _on_succeeded(self, event: SavefileProcessingSucceeded) -> None:
         entry = SavefileLogEntry(
             id=_new_id(),
             status=SavefileProcessingStatus.SUCCEEDED,
@@ -50,12 +62,12 @@ def savefile_list_subscriptions(
             player_faction=event.player_faction,
             current_date_time=event.current_date_time,
             duration_ms=event.duration_ms,
-            recorded_at=_now(),
+            recorded_at=self._now(),
         )
-        await store.put(entry.id, entry)
+        await self._store.put(entry.id, entry)
 
     @log_call()
-    async def _on_failed(event: SavefileProcessingFailed) -> None:
+    async def _on_failed(self, event: SavefileProcessingFailed) -> None:
         entry = SavefileLogEntry(
             id=_new_id(),
             status=SavefileProcessingStatus.FAILED,
@@ -64,14 +76,9 @@ def savefile_list_subscriptions(
             player_faction=event.player_faction,
             current_date_time=event.current_date_time,
             duration_ms=None,
-            recorded_at=_now(),
+            recorded_at=self._now(),
         )
-        await store.put(entry.id, entry)
-
-    return (
-        (SavefileProcessingSucceeded, _dispatch),
-        (SavefileProcessingFailed, _dispatch),
-    )
+        await self._store.put(entry.id, entry)
 
 
 def _new_id() -> str:

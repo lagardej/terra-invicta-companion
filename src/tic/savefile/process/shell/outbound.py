@@ -17,34 +17,40 @@ from tic.shared.log_call import log_call
 from tic.shared.message_bus import MessageBus, Subscription
 
 
-def savefile_processing_publisher_subscriptions(
-    bus: MessageBus,
-) -> tuple[Subscription, ...]:
-    """Return subscriptions for publishing integration events."""
+class SavefileProcessingPublisher:
+    """Publish integration events from extracted savefile process data."""
 
-    async def _dispatch(event: Message) -> None:
+    def __init__(self, bus: MessageBus) -> None:
+        """Store dependencies used by the savefile process outbound shell."""
+        self._bus = bus
+
+    def subscriptions(self) -> tuple[Subscription, ...]:
+        """Return subscriptions for publishing integration events."""
+        return (
+            (SavefileCampaignDataExtracted, self._dispatch),
+            (SavefileFactionDataExtracted, self._dispatch),
+        )
+
+    async def _dispatch(self, event: Message) -> None:
         match event:
             case SavefileCampaignDataExtracted() as e:
-                await _on_campaign_data_extracted(e)
+                await self._on_campaign_data_extracted(e)
             case SavefileFactionDataExtracted() as e:
-                await _on_faction_data_extracted(e)
+                await self._on_faction_data_extracted(e)
 
     @log_call()
     async def _on_campaign_data_extracted(
+        self,
         event: SavefileCampaignDataExtracted,
     ) -> None:
-        await bus.publish(_to_campaign_data_extracted(event.data))
+        await self._bus.publish(_to_campaign_data_extracted(event.data))
 
     @log_call()
     async def _on_faction_data_extracted(
+        self,
         event: SavefileFactionDataExtracted,
     ) -> None:
-        await bus.publish(_to_faction_data_extracted(event.data))
-
-    return (
-        (SavefileCampaignDataExtracted, _dispatch),
-        (SavefileFactionDataExtracted, _dispatch),
-    )
+        await self._bus.publish(_to_faction_data_extracted(event.data))
 
 
 def _to_campaign_data_extracted(item: ExtractedCampaignData) -> CampaignDataExtracted:

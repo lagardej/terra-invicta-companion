@@ -12,31 +12,39 @@ from tic.shared.log_call import log_call
 from tic.shared.message_bus import MessageBus, Subscription
 
 
-def faction_update_subscriptions(
-    bus: MessageBus,
-    event_store: EventStore,
-) -> tuple[Subscription, ...]:
-    """Return subscriptions for faction update processing."""
+class FactionUpdateSubscriber:
+    """Subscribe to faction integration events and persist domain updates."""
 
-    async def _dispatch(event: Message) -> None:
+    def __init__(self, bus: MessageBus, event_store: EventStore) -> None:
+        """Store dependencies used by the faction update shell."""
+        self._bus = bus
+        self._event_store = event_store
+
+    def subscriptions(self) -> tuple[Subscription, ...]:
+        """Return subscriptions for faction update processing."""
+        return ((FactionDataExtracted, self._dispatch),)
+
+    async def _dispatch(self, event: Message) -> None:
         match event:
             case FactionDataExtracted() as e:
-                await _on_faction_data_extracted(e)
+                await self._on_faction_data_extracted(e)
 
     @log_call()
-    async def _on_faction_data_extracted(event: FactionDataExtracted) -> None:
+    async def _on_faction_data_extracted(self, event: FactionDataExtracted) -> None:
         command = _to_command(event)
         event_filter = _event_filter(event)
-        query_result = await event_store.query(event_filter)
+        query_result = await self._event_store.query(event_filter)
         context = CommandContext(state=_fold_state(query_result.events))
         expected_max_sequence = query_result.max_sequence
 
         domain_event = await handle_update_faction(command, context)
 
-        await event_store.append(event_filter, expected_max_sequence, domain_event)
-        await bus.publish(domain_event)
-
-    return ((FactionDataExtracted, _dispatch),)
+        await self._event_store.append(
+            event_filter,
+            expected_max_sequence,
+            domain_event,
+        )
+        await self._bus.publish(domain_event)
 
 
 def _to_command(event: FactionDataExtracted) -> UpdateFaction:

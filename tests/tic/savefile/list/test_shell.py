@@ -12,7 +12,7 @@ from tic.savefile._events import (
     SavefileProcessingSucceeded,
 )
 from tic.savefile.list.document import SavefileLogEntry, SavefileProcessingStatus
-from tic.savefile.list.shell import savefile_list_subscriptions
+from tic.savefile.list.shell import SavefileListSubscriber
 
 pytestmark = pytest.mark.integration
 
@@ -36,7 +36,7 @@ class TestSuccessPath:
             current_date_time=_GAME_DATE,
             duration_ms=42,
         )
-        _, dispatch = savefile_list_subscriptions(store, now=lambda: _NOW)[0]
+        _, dispatch = SavefileListSubscriber(store, now=lambda: _NOW).subscriptions()[0]
 
         await dispatch(event)
 
@@ -60,7 +60,7 @@ class TestSuccessPath:
             current_date_time=_GAME_DATE,
             duration_ms=10,
         )
-        _, dispatch = savefile_list_subscriptions(store, now=lambda: _NOW)[0]
+        _, dispatch = SavefileListSubscriber(store, now=lambda: _NOW).subscriptions()[0]
 
         await dispatch(event)
         await dispatch(event)
@@ -79,7 +79,7 @@ class TestFailures:
             player_faction=3,
             current_date_time=_GAME_DATE,
         )
-        _, dispatch = savefile_list_subscriptions(store, now=lambda: _NOW)[1]
+        _, dispatch = SavefileListSubscriber(store, now=lambda: _NOW).subscriptions()[1]
 
         await dispatch(event)
 
@@ -95,7 +95,7 @@ class TestFailures:
         self, store: DocumentStoreInMemory[SavefileLogEntry]
     ) -> None:
         event = SavefileProcessingFailed(reason="identity extraction failed")
-        _, dispatch = savefile_list_subscriptions(store, now=lambda: _NOW)[1]
+        _, dispatch = SavefileListSubscriber(store, now=lambda: _NOW).subscriptions()[1]
 
         await dispatch(event)
 
