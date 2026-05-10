@@ -7,8 +7,8 @@ from datetime import UTC, datetime
 import pytest
 
 from tests.tic.conftest import E2ERuntime, E2ERuntimeBuilder
-from tic.faction._events import FactionUpdated
-from tic.faction.update.shell import FactionUpdateSubscriber
+from tic.faction.shared_events import FactionUpdated
+from tic.faction.update.shell_bus_in import BusIn as FactionUpdateBusIn
 from tic.shared.event_store import EventStore
 from tic.shared.events.faction import FactionDataExtracted
 from tic.shared.message_bus import MessageBus, Subscription
@@ -56,7 +56,7 @@ class TestFactionUpdateE2E:
             bus: MessageBus,
             event_store: EventStore,
         ) -> tuple[Subscription, ...]:
-            return FactionUpdateSubscriber(bus, event_store).subscriptions()
+            return FactionUpdateBusIn(bus, event_store).subscriptions()
 
         runtime: E2ERuntime = e2e_runtime_builder(
             subscription_factories=(subscriptions,),

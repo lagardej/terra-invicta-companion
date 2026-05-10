@@ -10,10 +10,8 @@ from tic.savefile._events import (
     SavefileProcessingFailed,
     SavefileProcessingSucceeded,
 )
-from tic.savefile.process.shell.inbound import SavefileProcessSubscriber
-from tic.savefile.process.shell.outbound import (
-    SavefileProcessingPublisher,
-)
+from tic.savefile.process.shell.bus_in import BusIn as SavefileProcessBusIn
+from tic.savefile.process.shell.bus_out import BusOut as SavefileProcessBusOut
 from tic.shared.event_store import EventStore
 from tic.shared.events.campaign import CampaignDataExtracted
 from tic.shared.events.faction import FactionDataExtracted
@@ -25,14 +23,14 @@ def savefile_process_subscriptions(
     event_store: EventStore,
 ) -> tuple[Subscription, ...]:
     """Adapter to keep shared e2e runtime fixture factory shape."""
-    return SavefileProcessSubscriber(bus, event_store).subscriptions()
+    return SavefileProcessBusIn(bus, event_store).subscriptions()
 
 
 def savefile_processing_publisher_subscriptions(
     bus: MessageBus,
 ) -> tuple[Subscription, ...]:
     """Adapter to keep shared e2e runtime fixture factory shape."""
-    return SavefileProcessingPublisher(bus).subscriptions()
+    return SavefileProcessBusOut(bus).subscriptions()
 
 
 @pytest.fixture

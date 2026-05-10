@@ -41,7 +41,7 @@ from tic.shared.log_call import log_call
 from tic.shared.message_bus import MessageBus, Subscription
 
 
-class SavefileProcessSubscriber:
+class BusIn:
     """Subscribe to savefile change events and coordinate processing."""
 
     def __init__(self, bus: MessageBus, event_store: EventStore) -> None:

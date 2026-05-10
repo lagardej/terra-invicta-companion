@@ -14,128 +14,134 @@ The architecture enforces a hard boundary between pure logic and side-effecting 
 
 **Functional Core** — no I/O, no bus calls, no database writes:
 
-- Savefile parser
 - Domain logic (data transformation, validation, event construction)
 - All functions here are pure: same input → same output, no observable side effects
 
 **Imperative Shell** — all side effects live here:
 
-- File watcher (reads from disk)
-- Bus subscribers that write the read model
-- WS broadcaster
-- HTTP handlers
+- Inbound transport adapters (filesystem watcher, HTTP handlers, bus subscribers)
+- Outbound transport adapters (bus publishers, WS broadcaster)
 
 This boundary is the primary guard against complexity drift. If a function in the core needs to "do something", that's a design error — lift the effect into the shell instead.
 
 ---
 
-## Layers
+## Module / use case structure
 
-The architecture is a hybrid CQRS + message bus. All domain processing communicates via the bus. The read side is intentionally dumb and bypasses it entirely.
+The codebase is organized into **bounded contexts** (modules), each subdivided into **use cases**.
 
-```md
-File watcher → [bus] → Domain / Parser → [bus] → Read model
-                                                 → WS broadcaster → Browser
+```
+src/tic/
+  <module>/
+    __init__.py
+    shared/             # shared between use cases within the module
+      _events.py        # domain events, private to the module
+      ...
+    <use_case>/
+      __init__.py
+      core/             # functional core: pure logic, no side effects
+      shell/            # imperative shell(s), one file per transport/direction
+        <transport>_<direction>.py
 ```
 
-### File watcher
+Nothing goes directly in a module or use case directory — all logic lives inside `core/`, `shell/`, or `shared/`.
 
-Monitors the savefile directory. Emits `SavefileDetected` on the bus when a new or modified save is found. Shell layer — pure I/O.
+For simple use cases with a single file per layer, the directory structure can be flattened using a prefix:
 
-### Domain / Parser
+```
+<use_case>/
+  __init__.py
+  core_<name>.py
+  shared_<name>.py
+  shell_<transport>_<direction>.py
+```
 
-Subscribes to `SavefileDetected`. Parses and processes the savefile. This is the **functional core**: it receives bytes, returns events. No side effects. Emits either:
+The same flattening applies at the module level for shared files:
 
-- `ImportSucceeded` — data written to the read model as a side effect (in the shell)
-- `ImportFailed(reason)` — error recorded in the read model (import log row)
+```
+<module>/
+  __init__.py
+  shared_events.py    # replaces shared/_events.py
+  <use_case>/
+    ...
+```
 
-### Read model
+Each use case is self-contained: its core, its shell(s), and its types. The shell is the only entry point from the outside world.
 
-Updated exclusively as a side effect of domain events. Never written to directly by the HTTP layer. Mostly static from the browser's perspective — HTMX fetches fragments on demand.
-
-### WS broadcaster
-
-A thin bus subscriber. Forwards domain events to connected browser clients. Carries signals only — no data payload. The browser decides whether to refetch via HTMX.
-
----
-
-## Aggregateless event sourcing
-
-The domain uses event sourcing without aggregates. Classical aggregates enforce invariants before emitting events — this domain currently has none worth enforcing. Each savefile import is independent: there is no "reject if faction already exists" logic, no concurrent writes, no conflict resolution.
-
-The pipeline is therefore: **savefile bytes → pure parse → events → read model projection**.
-
-Events are the source of truth for import history. The read model is a projection — it can be rebuilt from the event log at any time.
-
-**Boundary condition:** if the domain grows to include user-owned state (annotations, manual overrides, merge logic between saves), invariant enforcement will be needed. At that point, introduce aggregates surgically. The FCIS boundary makes this safe — aggregates live in the core, their persistence side effects in the shell.
+Shared infrastructure (bus, event store, document store, base types) lives in `src/tic/shared/` and `src/tic/_infra/`. Cross-cutting config and wiring lives in `src/tic/_config/`.
 
 ---
 
-## Event types and visibility boundaries
+## Shell naming
 
-Events are classified into three categories by their scope and crossing boundaries:
+Shell modules follow a `shell_{transport}_{direction}` naming scheme. The transport and direction must be readable from the filename alone — no need to open the file.
+
+**Direction:** `in` (inbound) or `out` (outbound).
+
+**Transport examples:** `filesystem`, `http`, `ws`, `cli`, `bus`, `pubsub`, `reqrep`.
+
+When a use case has only a few shell endpoints, a flat module is acceptable:
+
+```
+shell_bus_in.py
+shell_http_in.py
+shell_ws_out.py
+```
+
+When a use case has many shell endpoints, group them in a `shell/` directory — the `{transport}_{direction}` pattern is preserved in the filenames:
+
+```
+shell/
+  bus_in.py
+  bus_out.py
+  filewatch_in.py
+  http_in.py
+  ws_out.py
+```
+
+The class inside the module mirrors the filename in PascalCase: `BusIn`, `HttpIn`, `BusOut`, `WsOut`, etc.
+
+---
+
+## Event types, communication and boundaries
+
+All domain processing communicates via the bus. The read side bypasses it entirely — Shells query the read model directly.
+
+The flow within a use case: the inbound shell receives external input, calls the core (pure), then publishes the resulting events onto the bus. Other shells react as subscribers — read model projections, outbound integration publishers, WS broadcasters. No shell calls another shell directly.
+
+The domain uses event sourcing without aggregates. Each processing run is independent: no concurrent writes, no conflict resolution. Events are the source of truth; the read model is a projection that can be rebuilt from the event log at any time.
+
+Events are classified into three categories by their scope and boundary-crossing behaviour:
 
 ### DomainEvent — within bounded context
 
-- Represents state change within a single bounded context
+- Represents a state change within a single bounded context
 - Persisted to the event store (historical record)
-- Published on the bus only within the context
-- Examples: `SavefileProcessingSucceeded`, `FactionUpdated`
+- Never imported by another context — use integration events instead
 
-**Module privacy:** Domain events live in `src/tic/<context>/_events.py` (underscore prefix signals "private to context").
-
-**Import rule:** Never import domain events from another context. Use integration events instead.
-
-```python
-# ✓ Within savefile context
-from tic.savefile._events import SavefileProcessingSucceeded
-
-# ✗ From outside savefile context
-from tic.savefile._events import SavefileProcessingSucceeded  # Don't do this
-```
+Domain events live in `src/tic/<context>/shared/_events.py` (or `shared_events.py` in the flat variant) — private to the module.
 
 ### IntegrationEvent — across bounded contexts
 
 - Crosses context boundaries
-- Published on shared bus for inter-context communication
+- Published on the shared bus for inter-context communication
 - Never persisted (transient signal, not historical record)
-- Examples: `SavefileChangeDetected`, `CampaignDataExtracted` (in shared/events/)
 
-**Module location:** Defined in `src/tic/shared/events/` — publicly importable.
-
-**Purpose:** Enable loose coupling. The importing context doesn't depend on the exporting context's internal event structure; it depends on this publicly-exported contract.
-
-```python
-# ✓ From any context
-from tic.shared.events.savefile import SavefileChangeDetected
-from tic.shared.events.campaign import CampaignDataExtracted
-```
+Defined in `src/tic/shared/events/` — publicly importable by any context. The importing context depends on this shared contract, not on the exporting context's internal structure.
 
 ### Event — use-case-scoped coordination (not persisted)
 
-- Internal to a use case; not persisted to event store
+- Internal to a use case; not persisted to the event store
 - Used for dispatching within a shell module when handling multiple event types
 - Never crosses context boundaries
-- Example: `SavefileCampaignDataExtracted` (coordination signal from inbound to outbound)
 
-**Visibility rule:** Treat like DomainEvent — keep in `_events.py` and don't export outside context.
+Treat like a DomainEvent — keep in `_events.py` and don't export outside the context.
 
-### Read-model projections listen to domain events
+### Read-model projections
 
-When a use case needs a read model (e.g., `SavefileListListener` projecting processing status), it **listens to domain events** from its own context, not integration events.
+A projection within a context listens to **domain events** from its own context, not integration events — the projection is an internal concern.
 
-- Reason: The projection is internal to the context. It's just a different concern (read vs write).
-- If an external system needs to react, it subscribes to an integration event published by the context's outbound shell.
-
-```python
-# SavefileListListener is within savefile context, so:
-from tic.savefile._events import SavefileProcessingSucceeded  # ✓ Domain event
-
-# External integrator would subscribe to:
-from tic.shared.events.savefile import SavefileProcessingSucceeded  # Different event!
-```
-
-(Note: These are distinct event classes with the same name. The shared version is the cross-context contract.)
+If an external context needs to react, it subscribes to an integration event published by the outbound shell.
 
 ---
 
@@ -155,31 +161,28 @@ from tic.shared.events.savefile import SavefileProcessingSucceeded  # Different 
 
 HTMX requests a fragment. The read handler queries the read model directly. Jinja2 renders and returns the fragment. The bus is not involved.
 
-```md
-Browser (HTMX) → GET /factions/table → Read handler → Read model → Jinja2 fragment
+```
+Browser (HTMX) → GET /resource → HttpIn → Read model → Jinja2 fragment
 ```
 
 ### Write (HTTP + WebSocket feedback) — CQRS
 
 Handler validates the command synchronously (400 on bad input). If valid, publishes to the bus and returns `202 Accepted`. Domain processing is async. Outcome is pushed back to the browser via WebSocket.
 
-```md
-Browser → POST /import → Write handler → [bus] → Domain
-                       ↓
-                  202 Accepted
+```
+Browser → POST /resource → HttpIn → [bus] → Core
+                         ↓
+                    202 Accepted
 
-Domain → ImportSucceeded / ImportFailed → [bus] → WS broadcaster → toast
+Core → Succeeded / Failed → [bus] → WS broadcaster → toast
 ```
 
 ---
 
 ## Error handling
 
-Errors are first-class domain events. `ImportFailed` is handled identically to `ImportSucceeded`:
+Errors are first-class domain events, handled identically to success events: written to the read model and forwarded to the browser via WebSocket.
 
-- written to the read model (import log row with status and reason)
-- forwarded by the WS broadcaster as a toast notification to the browser
-
-No special error plumbing. The import log is the source of truth for processing status.
+No special error plumbing. The event log is the source of truth for processing status.
 
 Command validation failures are rejected synchronously by the HTTP handler before the bus is involved — standard 4xx response.

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tic.faction._events import FactionUpdated
+from tic.faction.shared_events import FactionUpdated
 from tic.faction.update.core import FactionState, UpdateFaction, handle_update_faction
 from tic.shared.command import CommandContext
 from tic.shared.event_store import EventFilter, EventStore
@@ -12,11 +12,11 @@ from tic.shared.log_call import log_call
 from tic.shared.message_bus import MessageBus, Subscription
 
 
-class FactionUpdateSubscriber:
+class BusIn:
     """Subscribe to faction integration events and persist domain updates."""
 
     def __init__(self, bus: MessageBus, event_store: EventStore) -> None:
-        """Store dependencies used by the faction update shell."""
+        """Store dependencies used by the faction update bus inbound shell."""
         self._bus = bus
         self._event_store = event_store
 

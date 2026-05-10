@@ -14,7 +14,7 @@ from tic.shared.http_module import HttpModule
 _TEMPLATES_DIR = Path(__file__).parents[3] / "templates"
 
 
-class HomeHttp(HttpModule):
+class HttpIn(HttpModule):
     """Serves the application homepage."""
 
     def router(self) -> APIRouter:

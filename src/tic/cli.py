@@ -3,20 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import logging
-from pathlib import Path
 
 import uvicorn
-from watchfiles import Change, awatch
 
 from tic._config import boot
+from tic.savefile.process.shell.filewatch_in import FilesystemIn
 from tic.shared.application import Application
-from tic.shared.events.savefile import SavefileChangeDetected
 from tic.shared.message_bus import MessageBus
-
-_log = logging.getLogger(__name__)
-
-_AUTOSAVE_NAMES = {"Autosave.json", "Autosave.gz"}
 
 
 def main() -> None:
@@ -36,26 +29,5 @@ async def _run(app: Application) -> None:
 
     await asyncio.gather(
         web_server.serve(),
-        _watch(watch_dir, message_bus),
+        FilesystemIn(message_bus).watch(watch_dir),
     )
-
-
-async def _watch(watch_dir: Path, bus: MessageBus) -> None:
-    _log.info("Watching %s", watch_dir)
-
-    for name in _AUTOSAVE_NAMES:
-        path = watch_dir / name
-        if path.exists():
-            _log.info("Found existing savefile %s", path)
-            await bus.publish(SavefileChangeDetected(path=path))
-
-    def autosave_filter(change: object, path: str) -> bool:
-        p = Path(path)
-        return p.parent == watch_dir and p.name in _AUTOSAVE_NAMES
-
-    async for changes in awatch(watch_dir, watch_filter=autosave_filter):
-        for change, path in changes:
-            if change is Change.deleted:
-                continue
-            _log.info("Detected change in %s", path)
-            await bus.publish(SavefileChangeDetected(path=Path(path)))

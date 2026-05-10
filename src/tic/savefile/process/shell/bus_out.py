@@ -17,7 +17,7 @@ from tic.shared.log_call import log_call
 from tic.shared.message_bus import MessageBus, Subscription
 
 
-class SavefileProcessingPublisher:
+class BusOut:
     """Publish integration events from extracted savefile process data."""
 
     def __init__(self, bus: MessageBus) -> None:

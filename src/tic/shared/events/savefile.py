@@ -6,11 +6,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from tic.shared.events.base import IntegrationEvent
+from tic.shared.events.base import Event, IntegrationEvent
 
 
 @dataclass(frozen=True)
-class SavefileChangeDetected(IntegrationEvent):
+class SavefileChangeDetected(Event):
     """Emitted when a savefile change is detected on disk."""
 
     path: Path

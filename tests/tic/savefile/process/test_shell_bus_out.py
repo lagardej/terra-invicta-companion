@@ -18,9 +18,7 @@ from tic.savefile.process.core.extracted_data import (
 from tic.savefile.process.core.extracted_data import (
     ScenarioCustomizations as ExtractedScenarioCustomizations,
 )
-from tic.savefile.process.shell.outbound import (
-    SavefileProcessingPublisher,
-)
+from tic.savefile.process.shell.bus_out import BusOut as SavefileProcessBusOut
 from tic.shared.events.base import Message
 from tic.shared.events.campaign import CampaignDataExtracted, ScenarioCustomizations
 from tic.shared.events.faction import FactionDataExtracted
@@ -110,7 +108,7 @@ class TestExtractedData:
     @pytest.mark.asyncio
     async def test_publishes_campaign_data_integration_event(self) -> None:
         bus = MessageBusInMemory()
-        _, dispatch = SavefileProcessingPublisher(bus).subscriptions()[0]
+        _, dispatch = SavefileProcessBusOut(bus).subscriptions()[0]
         captured: list[CampaignDataExtracted] = []
 
         async def capture(event: Message) -> None:
@@ -131,7 +129,7 @@ class TestExtractedData:
     @pytest.mark.asyncio
     async def test_publishes_faction_data_integration_event(self) -> None:
         bus = MessageBusInMemory()
-        _, dispatch = SavefileProcessingPublisher(bus).subscriptions()[1]
+        _, dispatch = SavefileProcessBusOut(bus).subscriptions()[1]
         captured: list[FactionDataExtracted] = []
 
         async def capture(event: Message) -> None:

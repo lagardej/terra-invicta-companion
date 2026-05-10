@@ -18,10 +18,7 @@ from tic.savefile._events import (
     SavefileProcessingFailed,
     SavefileProcessingSucceeded,
 )
-from tic.savefile.process.core.command import (
-    ProcessResult,
-    SavefileState,
-)
+from tic.savefile.process.core.command import ProcessResult, SavefileState
 from tic.savefile.process.core.extracted_data import (
     ExtractedCampaignData,
 )
@@ -29,7 +26,7 @@ from tic.savefile.process.core.extracted_data import (
     ScenarioCustomizations as ExtractedScenarioCustomizations,
 )
 from tic.savefile.process.core.identity import Identity
-from tic.savefile.process.shell.inbound import SavefileProcessSubscriber
+from tic.savefile.process.shell.bus_in import BusIn as SavefileProcessBusIn
 from tic.shared.event_store import EventFilter
 from tic.shared.events.base import Message
 from tic.shared.events.savefile import SavefileChangeDetected
@@ -109,7 +106,7 @@ class TestSuccessPath:
         mock_handle = AsyncMock(return_value=Success(process_result))
         bus = MessageBusInMemory()
         event_store = EventStoreInMemory()
-        _, on_savefile_detected = SavefileProcessSubscriber(
+        _, on_savefile_detected = SavefileProcessBusIn(
             bus, event_store
         ).subscriptions()[0]
         published_domain_events: list[Message] = []
@@ -120,7 +117,7 @@ class TestSuccessPath:
         bus.subscribe(SavefileProcessingSucceeded, capture_domain_event)
         bus.subscribe(SavefileCampaignDataExtracted, capture_domain_event)
 
-        _patch = "tic.savefile.process.shell.inbound.handle_process_savefile"
+        _patch = "tic.savefile.process.shell.bus_in.handle_process_savefile"
         with patch(_patch, mock_handle):
             await on_savefile_detected(SavefileChangeDetected(path=savefile_path))
 
@@ -161,7 +158,7 @@ class TestFailures:
         mock_handle = AsyncMock()
         bus = MessageBusInMemory()
         event_store = EventStoreInMemory()
-        _, on_savefile_detected = SavefileProcessSubscriber(
+        _, on_savefile_detected = SavefileProcessBusIn(
             bus, event_store
         ).subscriptions()[0]
         published_events: list[Message] = []
@@ -171,7 +168,7 @@ class TestFailures:
 
         bus.subscribe(SavefileIdentityExtractionFailed, capture_failure)
 
-        _patch = "tic.savefile.process.shell.inbound.handle_process_savefile"
+        _patch = "tic.savefile.process.shell.bus_in.handle_process_savefile"
         with patch(_patch, mock_handle):
             await on_savefile_detected(SavefileChangeDetected(path=savefile_path))
 

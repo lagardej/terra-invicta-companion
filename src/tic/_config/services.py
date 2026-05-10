@@ -1,14 +1,13 @@
 from lagom import ExplicitContainer
 
 from tic._config.profiles import Profile
-from tic.faction.update.shell import FactionUpdateSubscriber
-from tic.home.shell import HomeHttp
+from tic.faction.update.shell_bus_in import BusIn as FactionUpdateBusIn
+from tic.home.shell_http_in import HttpIn as HomeHttpIn
 from tic.savefile.list.document import SavefileLogEntry
-from tic.savefile.list.shell import SavefileListHttp, SavefileListSubscriber
-from tic.savefile.process.shell.inbound import SavefileProcessSubscriber
-from tic.savefile.process.shell.outbound import (
-    SavefileProcessingPublisher,
-)
+from tic.savefile.list.shell_bus_in import BusIn as SavefileListBusIn
+from tic.savefile.list.shell_http_in import HttpIn as SavefileListHttpIn
+from tic.savefile.process.shell.bus_in import BusIn as SavefileProcessBusIn
+from tic.savefile.process.shell.bus_out import BusOut as SavefileProcessBusOut
 from tic.shared.document_store import DocumentStore
 from tic.shared.event_store import EventStore
 from tic.shared.message_bus import MessageBus
@@ -21,18 +20,15 @@ def register_services(container: ExplicitContainer, profile: Profile) -> None:
     c[EventStore] = profile.event_store()
     c[DocumentStore[SavefileLogEntry]] = profile.document_store_savefile_log_entry()
 
-    c[HomeHttp] = lambda: HomeHttp()
-    c[SavefileListHttp] = lambda: SavefileListHttp(
+    c[HomeHttpIn] = lambda: HomeHttpIn()
+    c[SavefileListHttpIn] = lambda: SavefileListHttpIn(
         store=c[DocumentStore[SavefileLogEntry]]
     )
 
     bus = c[MessageBus]
     event_store = c[EventStore]
 
-    subs = SavefileProcessSubscriber(bus, event_store).subscriptions()
-    c[MessageBus].subscribe(*subs)
-    c[MessageBus].subscribe(*SavefileProcessingPublisher(bus).subscriptions())
-    c[MessageBus].subscribe(*FactionUpdateSubscriber(bus, event_store).subscriptions())
-    c[MessageBus].subscribe(
-        *SavefileListSubscriber(c[DocumentStore[SavefileLogEntry]]).subscriptions()
-    )
+    c[MessageBus].subscribe(*SavefileProcessBusIn(bus, event_store).subscriptions())
+    c[MessageBus].subscribe(*SavefileProcessBusOut(bus).subscriptions())
+    c[MessageBus].subscribe(*FactionUpdateBusIn(bus, event_store).subscriptions())
+    c[MessageBus].subscribe(*SavefileListBusIn(c[DocumentStore[SavefileLogEntry]]).subscriptions())
