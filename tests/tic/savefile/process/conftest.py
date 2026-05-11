@@ -10,20 +10,10 @@ from tic.savefile._events import (
     SavefileProcessingFailed,
     SavefileProcessingSucceeded,
 )
-from tic.savefile.process.shell.bus_in import BusIn as SavefileProcessBusIn
 from tic.savefile.process.shell.bus_out import BusOut as SavefileProcessBusOut
-from tic.shared.event_store import EventStore
 from tic.shared.events.campaign import CampaignDataExtracted
 from tic.shared.events.faction import FactionDataExtracted
 from tic.shared.message_bus import MessageBus, Subscription
-
-
-def savefile_process_subscriptions(
-    bus: MessageBus,
-    event_store: EventStore,
-) -> tuple[Subscription, ...]:
-    """Adapter to keep shared e2e runtime fixture factory shape."""
-    return SavefileProcessBusIn(bus, event_store).subscriptions()
 
 
 def savefile_processing_publisher_subscriptions(
@@ -37,10 +27,7 @@ def savefile_processing_publisher_subscriptions(
 def savefile_process_runtime(e2e_runtime_builder: E2ERuntimeBuilder) -> object:
     """Return savefile process runtime built from shared e2e plumbing."""
     return e2e_runtime_builder(
-        subscription_factories=(
-            savefile_process_subscriptions,
-            savefile_processing_publisher_subscriptions,
-        ),
+        subscription_factories=(savefile_processing_publisher_subscriptions,),
         capture_event_types=(
             SavefileProcessingSucceeded,
             SavefileProcessingFailed,

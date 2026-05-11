@@ -19,17 +19,14 @@ from tic.savefile._events import (
     SavefileProcessingSucceeded,
 )
 from tic.savefile.process.core.command import ProcessResult, SavefileState
-from tic.savefile.process.core.extracted_data import (
-    ExtractedCampaignData,
-)
+from tic.savefile.process.core.extracted_data import ExtractedCampaignData
 from tic.savefile.process.core.extracted_data import (
     ScenarioCustomizations as ExtractedScenarioCustomizations,
 )
 from tic.savefile.process.core.identity import Identity
-from tic.savefile.process.shell.bus_in import BusIn as SavefileProcessBusIn
+from tic.savefile.process.shell.filewatch_in import FilewatchIn
 from tic.shared.event_store import EventFilter
 from tic.shared.events.base import Message
-from tic.shared.events.savefile import SavefileChangeDetected
 
 from .conftest import valid_savefile_data
 
@@ -106,9 +103,7 @@ class TestSuccessPath:
         mock_handle = AsyncMock(return_value=Success(process_result))
         bus = MessageBusInMemory()
         event_store = EventStoreInMemory()
-        _, on_savefile_detected = SavefileProcessBusIn(
-            bus, event_store
-        ).subscriptions()[0]
+        filewatch_in = FilewatchIn(bus, event_store)
         published_domain_events: list[Message] = []
 
         async def capture_domain_event(event: Message) -> None:
@@ -117,9 +112,9 @@ class TestSuccessPath:
         bus.subscribe(SavefileProcessingSucceeded, capture_domain_event)
         bus.subscribe(SavefileCampaignDataExtracted, capture_domain_event)
 
-        _patch = "tic.savefile.process.shell.bus_in.handle_process_savefile"
+        _patch = "tic.savefile.process.shell.filewatch_in.handle_process_savefile"
         with patch(_patch, mock_handle):
-            await on_savefile_detected(SavefileChangeDetected(path=savefile_path))
+            await filewatch_in._process_savefile(savefile_path)
 
         assert mock_handle.call_count == 1
         command, context = mock_handle.call_args.args
@@ -158,9 +153,7 @@ class TestFailures:
         mock_handle = AsyncMock()
         bus = MessageBusInMemory()
         event_store = EventStoreInMemory()
-        _, on_savefile_detected = SavefileProcessBusIn(
-            bus, event_store
-        ).subscriptions()[0]
+        filewatch_in = FilewatchIn(bus, event_store)
         published_events: list[Message] = []
 
         async def capture_failure(event: Message) -> None:
@@ -168,9 +161,9 @@ class TestFailures:
 
         bus.subscribe(SavefileIdentityExtractionFailed, capture_failure)
 
-        _patch = "tic.savefile.process.shell.bus_in.handle_process_savefile"
+        _patch = "tic.savefile.process.shell.filewatch_in.handle_process_savefile"
         with patch(_patch, mock_handle):
-            await on_savefile_detected(SavefileChangeDetected(path=savefile_path))
+            await filewatch_in._process_savefile(savefile_path)
 
         assert mock_handle.call_count == 0
         # Identity extraction failure is observable via integration event only.

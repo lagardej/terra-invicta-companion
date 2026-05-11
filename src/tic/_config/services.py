@@ -6,7 +6,6 @@ from tic.home.shell_http_in import HttpIn as HomeHttpIn
 from tic.savefile.list.document import SavefileLogEntry
 from tic.savefile.list.shell_bus_in import BusIn as SavefileListBusIn
 from tic.savefile.list.shell_http_in import HttpIn as SavefileListHttpIn
-from tic.savefile.process.shell.bus_in import BusIn as SavefileProcessBusIn
 from tic.savefile.process.shell.bus_out import BusOut as SavefileProcessBusOut
 from tic.shared.document_store import DocumentStore
 from tic.shared.event_store import EventStore
@@ -28,7 +27,8 @@ def register_services(container: ExplicitContainer, profile: Profile) -> None:
     bus = c[MessageBus]
     event_store = c[EventStore]
 
-    c[MessageBus].subscribe(*SavefileProcessBusIn(bus, event_store).subscriptions())
     c[MessageBus].subscribe(*SavefileProcessBusOut(bus).subscriptions())
     c[MessageBus].subscribe(*FactionUpdateBusIn(bus, event_store).subscriptions())
-    c[MessageBus].subscribe(*SavefileListBusIn(c[DocumentStore[SavefileLogEntry]]).subscriptions())
+    c[MessageBus].subscribe(
+        *SavefileListBusIn(c[DocumentStore[SavefileLogEntry]]).subscriptions()
+    )

@@ -12,10 +12,10 @@ from tic.savefile._events import (
     SavefileProcessingFailed,
     SavefileProcessingSucceeded,
 )
+from tic.savefile.process.shell.filewatch_in import FilewatchIn
 from tic.shared.event_store import EventFilter
 from tic.shared.events.campaign import CampaignDataExtracted
 from tic.shared.events.faction import FactionDataExtracted
-from tic.shared.events.savefile import SavefileChangeDetected
 
 pytestmark = pytest.mark.e2e
 
@@ -31,7 +31,7 @@ class TestSavefileProcessE2E:
         assert _FIXTURE.exists()
 
         runtime = savefile_process_runtime
-        await runtime.bus.publish(SavefileChangeDetected(path=_FIXTURE))
+        await FilewatchIn(runtime.bus, runtime.event_store)._process_savefile(_FIXTURE)
 
         processing_succeeded = runtime.captured(SavefileProcessingSucceeded)
         processing_failed = runtime.captured(SavefileProcessingFailed)
