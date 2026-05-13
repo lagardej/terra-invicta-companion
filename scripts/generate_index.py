@@ -5,13 +5,13 @@ Output: build/index.json  (or <output-dir>/index.json)
 Schema:
   {
     "files": ["path/to/file", ...],
-    "by_symbol": {"SymbolName": "path", ...},
-    "by_file": {"path": ["Sym", ...], ...}
+    "by_symbol": {"SymbolName": ["path", ...], ...},
+    "by_file": {"path": [{"name": "Sym", "type": "class|function|async_function", "line": 1}, ...], ...}
   }
 
 "files" lists all tracked project files.
-"by_symbol" maps each symbol to the file that defines it (forward index).
-"by_file" maps each file to its symbols; files with no symbols are omitted.
+"by_symbol" maps each symbol to the files that define it (forward index).
+"by_file" maps each file to its symbols with type info; files with no symbols are omitted.
 """
 
 from __future__ import annotations
@@ -98,9 +98,9 @@ def _walk_files(project_root: Path, directory_name: str) -> list[str]:
 
 def _collect_symbols(
     project_root: Path,
-) -> tuple[dict[str, str], dict[str, list[str]]]:
-    by_symbol: dict[str, str] = {}
-    by_file: dict[str, list[str]] = {}
+) -> tuple[dict[str, list[str]], dict[str, list[dict[str, str]]]]:
+    by_symbol: dict[str, list[str]] = {}
+    by_file: dict[str, list[dict[str, str]]] = {}
 
     for directory_name in _SYMBOL_DIRECTORIES:
         for python_file in _iter_python_files(project_root / directory_name):
@@ -108,8 +108,8 @@ def _collect_symbols(
             symbols = _extract_symbols(python_file)
             if symbols:
                 by_file[rel] = symbols
-                for sym in symbols:
-                    by_symbol[sym] = rel
+                for entry in symbols:
+                    by_symbol.setdefault(entry["name"], []).append(rel)
 
     return dict(sorted(by_symbol.items())), dict(sorted(by_file.items()))
 
@@ -124,14 +124,21 @@ def _iter_python_files(directory: Path) -> list[Path]:
     return files
 
 
-def _extract_symbols(path: Path) -> list[str]:
+_SYMBOL_TYPES: dict[type, str] = {
+    ast.ClassDef: "class",
+    ast.FunctionDef: "function",
+    ast.AsyncFunctionDef: "async_function",
+}
+
+
+def _extract_symbols(path: Path) -> list[dict[str, str]]:
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     except SyntaxError:
         sys.stderr.write(f"Warning: could not parse {path}\n")
         return []
     return [
-        node.name
+        {"name": node.name, "type": _SYMBOL_TYPES[type(node)], "line": node.lineno}
         for node in tree.body
         if isinstance(node, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef)
     ]
