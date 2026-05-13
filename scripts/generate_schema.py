@@ -5,6 +5,8 @@ Usage:
 
 The schema is written to:
     build/schema/schema.json
+
+Requires quicktype on PATH or accessible via npx.
 """
 
 from __future__ import annotations
@@ -12,11 +14,12 @@ from __future__ import annotations
 import gzip
 import json
 import logging
+import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import cast
-
-from genson import SchemaBuilder
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 _log = logging.getLogger(__name__)
@@ -37,7 +40,7 @@ def _parse_constant(c: str) -> float:
 
 
 def _normalize(obj: object) -> object:
-    """Replace inf/nan floats with 0.0 so genson infers numeric types only."""
+    """Replace inf/nan floats with 0.0 so numeric types are inferred correctly."""
     if (
         isinstance(obj, float)
         and not obj == obj
@@ -65,10 +68,34 @@ def _extract_version(data: dict) -> str:
     return str(node)
 
 
+def _quicktype_cmd() -> str:
+    """Return the quicktype executable, preferring the installed binary over npx."""
+    if shutil.which("quicktype"):
+        return "quicktype"
+    return "npx quicktype"
+
+
 def _build_schema(data: dict) -> dict:
-    builder = SchemaBuilder()
-    builder.add_object(data)
-    return builder.to_schema()
+    """Invoke quicktype to infer a JSON Schema with $ref/$definitions from data."""
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False, encoding="utf-8"
+    ) as tmp:
+        json.dump(data, tmp)
+        tmp_path = Path(tmp.name)
+
+    try:
+        cmd = _quicktype_cmd().split() + [
+            "--src", str(tmp_path),
+            "--src-lang", "json",
+            "--lang", "schema",
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            _log.error("quicktype failed:\n%s", result.stderr)
+            sys.exit(1)
+        return json.loads(result.stdout)
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 def _write(schema: dict, version: str) -> None:
