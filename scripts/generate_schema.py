@@ -85,9 +85,12 @@ def _build_schema(data: dict) -> dict:
 
     try:
         cmd = _quicktype_cmd().split() + [
-            "--src", str(tmp_path),
-            "--src-lang", "json",
-            "--lang", "schema",
+            "--src",
+            str(tmp_path),
+            "--src-lang",
+            "json",
+            "--lang",
+            "schema",
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
         if result.returncode != 0:

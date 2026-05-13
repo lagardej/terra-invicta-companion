@@ -6,12 +6,19 @@ Schema:
   {
     "files": ["path/to/file", ...],
     "by_symbol": {"SymbolName": ["path", ...], ...},
-    "by_file": {"path": [{"name": "Sym", "type": "class|function|async_function", "line": 1}, ...], ...}
+        "by_file": {
+            "path": [
+                {"name": "Sym", "type": "class|function|async_function", "line": 1},
+                ...
+            ],
+            ...
+        }
   }
 
 "files" lists all tracked project files.
 "by_symbol" maps each symbol to the files that define it (forward index).
-"by_file" maps each file to its symbols with type info; files with no symbols are omitted.
+"by_file" maps each file to its symbols with type info;
+files with no symbols are omitted.
 """
 
 from __future__ import annotations
@@ -21,6 +28,7 @@ import contextlib
 import json
 import sys
 from pathlib import Path
+from typing import TypedDict
 
 _INDEX_NAME = "index.json"
 
@@ -31,6 +39,14 @@ _EXCLUDED_DIRS = frozenset({"__pycache__", ".pytest_cache", ".venv"})
 _PYTHON_SUFFIX = ".py"
 
 _ARG_COUNT_WITH_OUTPUT_DIR = 2
+
+
+class SymbolEntry(TypedDict):
+    """Represents one top-level symbol extracted from a Python file."""
+
+    name: str
+    type: str
+    line: int
 
 
 def main(argv: list[str]) -> int:
@@ -98,9 +114,9 @@ def _walk_files(project_root: Path, directory_name: str) -> list[str]:
 
 def _collect_symbols(
     project_root: Path,
-) -> tuple[dict[str, list[str]], dict[str, list[dict[str, str]]]]:
+) -> tuple[dict[str, list[str]], dict[str, list[SymbolEntry]]]:
     by_symbol: dict[str, list[str]] = {}
-    by_file: dict[str, list[dict[str, str]]] = {}
+    by_file: dict[str, list[SymbolEntry]] = {}
 
     for directory_name in _SYMBOL_DIRECTORIES:
         for python_file in _iter_python_files(project_root / directory_name):
@@ -131,7 +147,7 @@ _SYMBOL_TYPES: dict[type, str] = {
 }
 
 
-def _extract_symbols(path: Path) -> list[dict[str, str]]:
+def _extract_symbols(path: Path) -> list[SymbolEntry]:
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     except SyntaxError:

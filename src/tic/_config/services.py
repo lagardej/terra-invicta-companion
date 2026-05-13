@@ -31,4 +31,6 @@ def register_services(container: ExplicitContainer, profile: Profile) -> None:
     c[MessageBus].subscribe(*SavefileProcessBusIn(bus, event_store).subscriptions())
     c[MessageBus].subscribe(*SavefileProcessBusOut(bus).subscriptions())
     c[MessageBus].subscribe(*FactionUpdateBusIn(bus, event_store).subscriptions())
-    c[MessageBus].subscribe(*SavefileListBusIn(c[DocumentStore[SavefileLogEntry]]).subscriptions())
+    c[MessageBus].subscribe(
+        *SavefileListBusIn(c[DocumentStore[SavefileLogEntry]]).subscriptions()
+    )
