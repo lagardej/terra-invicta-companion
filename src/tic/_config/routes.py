@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from lagom import ExplicitContainer
 
 from tic.home.shell_http_in import HttpIn as HomeHttpIn
-from tic.savefile.list.shell_http_in import HttpIn as SavefileListHttpIn
+from tic.savefile.list.shell_http_in import SavefileListHttpIn as SavefileListHttpIn
 
 
 def register_routes(c: ExplicitContainer) -> None:

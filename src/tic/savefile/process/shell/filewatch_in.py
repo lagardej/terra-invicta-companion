@@ -6,7 +6,6 @@ import gzip
 import json
 import logging
 from collections.abc import Sequence
-from datetime import datetime
 from pathlib import Path
 
 from returns.result import Failure, Success
@@ -15,15 +14,10 @@ from watchfiles import Change, awatch
 from tic.savefile._events import (
     SavefileCampaignDataExtracted,
     SavefileFactionDataExtracted,
-    SavefileIdentityExtractionFailed,
-    SavefileProcessingFailed,
-    SavefileProcessingSucceeded,
+    SavefileProcessed,
 )
 from tic.savefile.process.core.command import (
-    AlreadyProcessedFailure,
-    DataProcessingFailure,
     ExtractedData,
-    ProcessingFailure,
     ProcessSavefile,
     SavefileState,
     handle_process_savefile,
@@ -31,15 +25,15 @@ from tic.savefile.process.core.command import (
 from tic.savefile.process.core.extracted_data import (
     ExtractedCampaignData,
     ExtractedFactionData,
-)
-from tic.savefile.process.core.identity import (
     Identity,
-    extract_identity_and_current_date_time,
 )
+from tic.savefile.process.core.extractor.current_date_time import (
+    extract_current_date_time,
+)
+from tic.savefile.process.core.extractor.identity import extract_identity
 from tic.shared.command import CommandContext
 from tic.shared.event_store import EventFilter, EventStore
 from tic.shared.events.base import DomainEvent, Message
-from tic.shared.events.savefile import SavefileChangeDetected
 from tic.shared.log_call import log_call
 from tic.shared.message_bus import MessageBus
 
@@ -48,7 +42,7 @@ _log = logging.getLogger(__name__)
 _AUTOSAVE_NAMES = {"Autosave.json", "Autosave.gz"}
 
 
-class FilewatchIn:
+class SavefileProcessFilewatchIn:
     """Watch the filesystem and publish savefile change events."""
 
     def __init__(self, bus: MessageBus, event_store: EventStore) -> None:
@@ -78,57 +72,53 @@ class FilewatchIn:
                 _log.info("Detected change in %s", path)
                 await self._process_savefile(Path(path))
 
+    @log_call()
     async def _process_savefile(self, path: Path) -> None:
         """Process one savefile path and publish resulting domain events."""
-        await self._on_savefile_detected(SavefileChangeDetected(path=path))
+        data = _load_file(path)
 
-    @log_call()
-    async def _on_savefile_detected(self, event: Message) -> None:
-        assert isinstance(event, SavefileChangeDetected)
-        data = _load_file(event)
-
-        identity_and_time_result = extract_identity_and_current_date_time(data)
-        if isinstance(identity_and_time_result, Failure):
-            # Identity extraction failed: observable coordination event only.
-            # Not persisted because it is not attachable to a savefile identity.
-            vf = identity_and_time_result.failure()
-            reason = "; ".join(vf.violations)
-            await self._bus.publish(SavefileIdentityExtractionFailed(reason=reason))
+        identity_result = extract_identity(data)
+        if isinstance(identity_result, Failure):
+            reason = "; ".join(identity_result.failure().violations)
+            _log.error("Identity extraction failed for %s: %s", path, reason)
             return
 
-        identity, current_date_time = identity_and_time_result.unwrap()
-        command = ProcessSavefile(data, identity, current_date_time)
+        current_date_time_result = extract_current_date_time(data)
+        if isinstance(current_date_time_result, Failure):
+            reason = "; ".join(current_date_time_result.failure().violations)
+            _log.error("Current datetime extraction failed for %s: %s", path, reason)
+            return
 
-        event_filter = _event_filter(identity)
-        query_result = await self._event_store.query(event_filter)
-        context = CommandContext(state=_fold_state(query_result.events))
-        expected_max_sequence = query_result.max_sequence
+        identity = identity_result.unwrap()
+        campaign_id = identity.__hash__()
+        current_date_time = current_date_time_result.unwrap()
+        filter = _event_filter(identity)
+        query_result = await self._event_store.query(filter)
+
+        command = ProcessSavefile(data, identity, current_date_time)
+        context = _create_context(query_result.events)
 
         result = await handle_process_savefile(command, context)
 
         match result:
             case Failure(failure_value):
-                # Domain invariant violation or processor failure
-                domain_event: DomainEvent = _to_failure_event(
-                    failure_value, identity, current_date_time
-                )
-                await self._event_store.append(
-                    event_filter, expected_max_sequence, domain_event
-                )
-                await self._bus.publish(domain_event)
+                _log.error("Processing failed for %s: %s", path, failure_value)
             case Success(process_result):
-                # All processors succeeded
-                await self._event_store.append(
-                    event_filter, expected_max_sequence, process_result.status_event
+                expected_max_sequence = query_result.max_sequence
+                event = process_result.event
+                data = process_result.extracted_data
+
+                await self._event_store.append(filter, expected_max_sequence, event)
+
+                coordination_events = _to_coordination_events(campaign_id, data)
+                await self._bus.publish(event, *coordination_events)
+
+                _log.info(
+                    "Processing succeeded for %s, %s", campaign_id, current_date_time
                 )
-                coordination = _to_coordination_events(process_result.extracted_data)
-                await self._bus.publish(process_result.status_event, *coordination)
-            case _ as unreachable:
-                raise AssertionError(f"Unexpected result: {unreachable}")
 
 
-def _load_file(event: SavefileChangeDetected) -> dict:
-    path = event.path
+def _load_file(path: Path) -> dict:
     opener = gzip.open if path.suffix == ".gz" else open
     with opener(path, "rb") as fh:
         return json.load(fh, parse_constant=_parse_constant)
@@ -140,55 +130,37 @@ def _parse_constant(c: str) -> float:
 
 def _event_filter(identity: Identity) -> EventFilter:
     return EventFilter(
-        event_types=(SavefileProcessingSucceeded.type(),),
+        event_types=(SavefileProcessed.type(),),
         payload_predicates={
             "real_world_campaign_start": identity.real_world_campaign_start,
-            "player_faction": identity.player_faction,
+            "scenario_id": identity.scenario_id,
         },
     )
 
 
-def _fold_state(history: Sequence[DomainEvent]) -> SavefileState:
+def _create_context(events: Sequence[DomainEvent]) -> CommandContext:
     state = SavefileState(current_date_time=None)
-    for event in history:
-        if isinstance(event, SavefileProcessingSucceeded):
+    for event in events:
+        if isinstance(event, SavefileProcessed):
             state = SavefileState(current_date_time=event.current_date_time)
-    return state
+
+    return CommandContext(state)
 
 
 def _to_coordination_events(
+    campaign_id: int,
     extracted: tuple[ExtractedData, ...],
 ) -> tuple[Message, ...]:
     """Convert raw extracted data to coordination events."""
-    return tuple(_to_coordination_event(item) for item in extracted)
+    return tuple(_to_coordination_event(campaign_id, item) for item in extracted)
 
 
 def _to_coordination_event(
+    campaign_id: int,
     item: ExtractedData,
 ) -> Message:
     match item:
         case ExtractedCampaignData():
-            return SavefileCampaignDataExtracted(data=item)
+            return SavefileCampaignDataExtracted(campaign_id, item)
         case ExtractedFactionData():
-            return SavefileFactionDataExtracted(data=item)
-        case _ as unreachable:
-            raise AssertionError(f"Unexpected extracted data type: {unreachable}")
-
-
-def _to_failure_event(
-    failure: ProcessingFailure,
-    identity: Identity,
-    current_date_time: datetime,
-) -> SavefileProcessingFailed:
-    """Map a ProcessingFailure to a domain event for persistence and publishing."""
-    match failure:
-        case AlreadyProcessedFailure():
-            reason = "Already processed: savefile current_date_time has not advanced"
-        case DataProcessingFailure(violations=v):
-            reason = "; ".join(v)
-    return SavefileProcessingFailed(
-        reason=reason,
-        real_world_campaign_start=identity.real_world_campaign_start,
-        player_faction=identity.player_faction,
-        current_date_time=current_date_time,
-    )
+            return SavefileFactionDataExtracted(campaign_id, item)

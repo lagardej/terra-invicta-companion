@@ -19,6 +19,7 @@ pytestmark = pytest.mark.e2e
 _DT = datetime(2020, 1, 1, 0, 0, 0, tzinfo=UTC)
 
 _EXTRACTED = FactionDataExtracted(
+    campaign_id=1,
     id=1,
     abductions=0,
     armies=(10, 20),

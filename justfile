@@ -13,7 +13,7 @@ ci: (check-fmt) (check-lint) (check-type) (test-cov)
 # Install all dependencies
 [group('setup')]
 install:
-    @uv venv --prompt "terra-invicta-companion"
+    @uv venv --prompt "tic"
     @uv sync --dev
     @uv run -- python -m pre_commit install
     @uv run -- python -m pre_commit install --hook-type pre-push

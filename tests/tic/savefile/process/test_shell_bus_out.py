@@ -18,7 +18,9 @@ from tic.savefile.process.core.extracted_data import (
 from tic.savefile.process.core.extracted_data import (
     ScenarioCustomizations as ExtractedScenarioCustomizations,
 )
-from tic.savefile.process.shell.bus_out import BusOut as SavefileProcessBusOut
+from tic.savefile.process.shell.bus_out import (
+    SavefileProcessBusOut as SavefileProcessBusOut,
+)
 from tic.shared.events.base import Message
 from tic.shared.events.campaign import CampaignDataExtracted, ScenarioCustomizations
 from tic.shared.events.faction import FactionDataExtracted
@@ -71,7 +73,7 @@ def _campaign_data() -> ExtractedCampaignData:
             variable_project_unlocks=False,
         ),
         start_difficulty=2,
-        template_name="tpl",
+        scenario_key="tpl",
     )
 
 
@@ -118,7 +120,7 @@ class TestExtractedData:
         bus.subscribe(CampaignDataExtracted, capture)
 
         extracted = _campaign_data()
-        await dispatch(SavefileCampaignDataExtracted(data=extracted))
+        await dispatch(SavefileCampaignDataExtracted(campaign_id=1, data=extracted))
 
         assert len(captured) == 1
         event = captured[0]
@@ -139,7 +141,7 @@ class TestExtractedData:
         bus.subscribe(FactionDataExtracted, capture)
 
         extracted = _faction_data()
-        await dispatch(SavefileFactionDataExtracted(data=extracted))
+        await dispatch(SavefileFactionDataExtracted(campaign_id=1, data=extracted))
 
         assert len(captured) == 1
         event = captured[0]

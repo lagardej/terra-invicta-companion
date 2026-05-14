@@ -3,6 +3,22 @@
 from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 
+from pydantic import BaseModel
+
+
+def to_datetime(epoch: EpochLike) -> datetime:
+    """Convert an epoch-like object to a timezone-aware datetime."""
+    return datetime(
+        year=epoch.year,
+        month=epoch.month,
+        day=epoch.day,
+        hour=epoch.hour,
+        minute=epoch.minute,
+        second=epoch.second,
+        microsecond=epoch.millisecond * 1000,
+        tzinfo=UTC,
+    )
+
 
 @runtime_checkable
 class EpochLike(Protocol):
@@ -44,15 +60,13 @@ class EpochLike(Protocol):
         ...
 
 
-def to_datetime(epoch: EpochLike) -> datetime:
-    """Convert an epoch-like object to a timezone-aware datetime."""
-    return datetime(
-        year=epoch.year,
-        month=epoch.month,
-        day=epoch.day,
-        hour=epoch.hour,
-        minute=epoch.minute,
-        second=epoch.second,
-        microsecond=epoch.millisecond * 1000,
-        tzinfo=UTC,
-    )
+class EpochModel(BaseModel):
+    """Pydantic model for validating epoch-like data structures."""
+
+    year: int
+    month: int
+    day: int
+    hour: int
+    minute: int
+    second: int
+    millisecond: int

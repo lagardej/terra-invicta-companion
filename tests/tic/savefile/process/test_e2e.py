@@ -8,11 +8,9 @@ import pytest
 
 from tests.tic.conftest import E2ERuntime
 from tic.savefile._events import (
-    SavefileIdentityExtractionFailed,
-    SavefileProcessingFailed,
-    SavefileProcessingSucceeded,
+    SavefileProcessed,
 )
-from tic.savefile.process.shell.filewatch_in import FilewatchIn
+from tic.savefile.process.shell.filewatch_in import SavefileProcessFilewatchIn
 from tic.shared.event_store import EventFilter
 from tic.shared.events.campaign import CampaignDataExtracted
 from tic.shared.events.faction import FactionDataExtracted
@@ -31,27 +29,25 @@ class TestSavefileProcessE2E:
         assert _FIXTURE.exists()
 
         runtime = savefile_process_runtime
-        await FilewatchIn(runtime.bus, runtime.event_store)._process_savefile(_FIXTURE)
+        await SavefileProcessFilewatchIn(
+            runtime.bus, runtime.event_store
+        )._process_savefile(_FIXTURE)
 
-        processing_succeeded = runtime.captured(SavefileProcessingSucceeded)
-        processing_failed = runtime.captured(SavefileProcessingFailed)
-        identity_failed = runtime.captured(SavefileIdentityExtractionFailed)
+        processing_succeeded = runtime.captured(SavefileProcessed)
         campaign_events = runtime.captured(CampaignDataExtracted)
         faction_events = runtime.captured(FactionDataExtracted)
 
         assert len(processing_succeeded) == 1
-        assert processing_failed == []
-        assert identity_failed == []
         assert len(campaign_events) == 1
         assert len(faction_events) == 8
 
         success = processing_succeeded[0]
         persisted = await runtime.event_store.query(
             EventFilter(
-                event_types=(SavefileProcessingSucceeded.type(),),
+                event_types=(SavefileProcessed.type(),),
                 payload_predicates={
                     "real_world_campaign_start": success.real_world_campaign_start,
-                    "player_faction": success.player_faction,
+                    "scenario_id": success.scenario_id,
                 },
             )
         )

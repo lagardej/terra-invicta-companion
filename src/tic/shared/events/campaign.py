@@ -10,6 +10,7 @@ from tic.shared.events.base import IntegrationEvent
 class CampaignDataExtracted(IntegrationEvent):
     """Emitted when campaign data was extracted from a savefile."""
 
+    campaign_id: int
     campaign_start_version: str
     current_date_time: datetime
     current_quarter_since_start: int
@@ -19,7 +20,7 @@ class CampaignDataExtracted(IntegrationEvent):
     real_world_campaign_start: datetime
     scenario_customizations: ScenarioCustomizations
     start_difficulty: int
-    template_name: str
+    scenario_key: str
 
 
 @dataclass(frozen=True)

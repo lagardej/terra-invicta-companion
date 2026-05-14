@@ -3,46 +3,45 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import cast
 
 import cattr
 from pydantic import AliasChoices, BaseModel, Field
 from returns.result import Failure, Result
 
-from tic.savefile.process.core.epoch import to_datetime
+from tic.savefile.process.core.data_validator import ValidationFailure, validate_data
+from tic.savefile.process.core.epoch import EpochModel, to_datetime
 from tic.savefile.process.core.extracted_data import (
     ExtractedCampaignData,
     ScenarioCustomizations,
 )
-from tic.savefile.process.core.validation import ValidationFailure, validate_input
-from tic.shared.log_call import log_call
 
 _CONVERTER = cattr.Converter()
 _CONVERTER.register_structure_hook(tuple, lambda v, t: tuple(v))
 
 
-@log_call()
-def process_campaign(
+def extract_campaign(
     data: dict, current_date_time: datetime
 ) -> Result[tuple[ExtractedCampaignData, ...], ValidationFailure]:
     """Map raw savefile data to extracted campaign data."""
     return (
-        validate_input(_CampaignInput, data)
+        validate_data(_CampaignModel, data)
         .bind(_extract_campaign_values)
         .map(lambda values: (_to_result(current_date_time, values[0], values[1]),))
     )
 
 
 def _extract_campaign_values(
-    validated: _CampaignInput,
+    validated: _CampaignModel,
 ) -> Result[tuple[_GlobalValuesValue, _TimeValue], ValidationFailure]:
+    global_values = validated.gamestates.global_values_state[0].value
+    time_state = validated.gamestates.time_state[0].value
     violations: list[str] = []
 
-    global_values = validated.gamestates.global_values_state[0].value
     if not isinstance(global_values, _GlobalValuesValue):
         actual_type = type(global_values).__name__
         violations.append(f"global_values_state[0] has unexpected type: {actual_type}")
 
-    time_state = validated.gamestates.time_state[0].value
     if not isinstance(time_state, _TimeValue):
         actual_type = type(time_state).__name__
         violations.append(f"time_state[0] has unexpected type: {actual_type}")
@@ -50,9 +49,12 @@ def _extract_campaign_values(
     if violations:
         return Failure(ValidationFailure(violations=tuple(violations)))
 
-    assert isinstance(global_values, _GlobalValuesValue)
-    assert isinstance(time_state, _TimeValue)
-    return Result.from_value((global_values, time_state))
+    return Result.from_value(
+        (
+            cast(_GlobalValuesValue, global_values),
+            cast(_TimeValue, time_state),
+        )
+    )
 
 
 def _to_result(
@@ -73,19 +75,45 @@ def _to_result(
         latest_save_version=global_values.latest_save_version,
         real_world_campaign_start=to_datetime(global_values.real_world_campaign_start),
         scenario_customizations=scenario_customizations,
+        scenario_key=time_state.template_name,
         start_difficulty=global_values.start_difficulty,
-        template_name=time_state.template_name,
     )
 
 
-class _Epoch(BaseModel):
-    year: int
-    month: int
-    day: int
-    hour: int
-    minute: int
-    second: int
-    millisecond: int
+class _CampaignModel(BaseModel):
+    gamestates: _Gamestates
+
+
+class _Gamestates(BaseModel):
+    global_values_state: list[_ValueItem] = Field(
+        ...,
+        validation_alias=AliasChoices(
+            "GlobalValuesState",
+            "PavonisInteractive.TerraInvicta.TIGlobalValuesState",
+        ),
+    )
+    time_state: list[_ValueItem] = Field(
+        ...,
+        validation_alias=AliasChoices(
+            "TimeState",
+            "PavonisInteractive.TerraInvicta.TITimeState",
+        ),
+    )
+
+
+class _ValueItem(BaseModel):
+    value: _GlobalValuesValue | _TimeValue = Field(..., alias="Value")
+
+
+class _GlobalValuesValue(BaseModel):
+    campaign_start_version: str = Field(..., alias="campaignStartVersion")
+    difficulty: int
+    latest_save_version: str = Field(..., alias="latestSaveVersion")
+    real_world_campaign_start: EpochModel = Field(..., alias="realWorldCampaignStart")
+    scenario_customizations: _ScenarioCustomizations = Field(
+        ..., alias="scenarioCustomizations"
+    )
+    start_difficulty: int = Field(..., alias="startDifficulty")
 
 
 class _ScenarioCustomizations(BaseModel):
@@ -150,43 +178,7 @@ class _ScenarioCustomizations(BaseModel):
     )
 
 
-class _GlobalValuesValue(BaseModel):
-    campaign_start_version: str = Field(..., alias="campaignStartVersion")
-    difficulty: int
-    latest_save_version: str = Field(..., alias="latestSaveVersion")
-    real_world_campaign_start: _Epoch = Field(..., alias="realWorldCampaignStart")
-    scenario_customizations: _ScenarioCustomizations = Field(
-        ..., alias="scenarioCustomizations"
-    )
-    start_difficulty: int = Field(..., alias="startDifficulty")
-
-
 class _TimeValue(BaseModel):
     days_in_campaign: int = Field(..., alias="daysInCampaign")
     current_quarter_since_start: int = Field(..., alias="currentQuarterSinceStart")
     template_name: str = Field(..., alias="templateName")
-
-
-class _ValueItem(BaseModel):
-    value: _GlobalValuesValue | _TimeValue = Field(..., alias="Value")
-
-
-class _Gamestates(BaseModel):
-    global_values_state: list[_ValueItem] = Field(
-        ...,
-        validation_alias=AliasChoices(
-            "GlobalValuesState",
-            "PavonisInteractive.TerraInvicta.TIGlobalValuesState",
-        ),
-    )
-    time_state: list[_ValueItem] = Field(
-        ...,
-        validation_alias=AliasChoices(
-            "TimeState",
-            "PavonisInteractive.TerraInvicta.TITimeState",
-        ),
-    )
-
-
-class _CampaignInput(BaseModel):
-    gamestates: _Gamestates

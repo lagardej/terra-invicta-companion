@@ -13,7 +13,7 @@ class ValidationFailure:
     violations: tuple[str, ...]
 
 
-def validate_input[ModelT: BaseModel](
+def validate_data[ModelT: BaseModel](
     model_type: type[ModelT],
     data: dict,
 ) -> Result[ModelT, ValidationFailure]:

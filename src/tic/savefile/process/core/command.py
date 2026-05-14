@@ -10,14 +10,14 @@ from functools import reduce
 
 from returns.result import Failure, Result, Success
 
-from tic.savefile._events import SavefileProcessingSucceeded
-from tic.savefile.process.core._processor import process_campaign, process_factions
+from tic.savefile._events import SavefileProcessed
+from tic.savefile.process.core.data_validator import ValidationFailure
 from tic.savefile.process.core.extracted_data import (
     ExtractedCampaignData,
     ExtractedFactionData,
+    Identity,
 )
-from tic.savefile.process.core.identity import Identity
-from tic.savefile.process.core.validation import ValidationFailure
+from tic.savefile.process.core.extractor import extract_campaign, extract_factions
 from tic.shared.command import CommandContext
 from tic.shared.log_call import log_call
 
@@ -33,7 +33,7 @@ ExtractedData = ExtractedCampaignData | ExtractedFactionData
 class ProcessResult:
     """Successful result of savefile processing."""
 
-    status_event: SavefileProcessingSucceeded
+    event: SavefileProcessed
     extracted_data: tuple[ExtractedData, ...]
 
 
@@ -89,8 +89,8 @@ type _Processor = Callable[
 
 
 _processors: list[_Processor] = [
-    process_campaign,
-    process_factions,
+    extract_campaign,
+    extract_factions,
 ]
 
 
@@ -158,9 +158,9 @@ def _to_success(
 ) -> Result[ProcessResult, ProcessingFailure]:
     return Success(
         ProcessResult(
-            status_event=SavefileProcessingSucceeded(
+            event=SavefileProcessed(
                 real_world_campaign_start=identity.real_world_campaign_start,
-                player_faction=identity.player_faction,
+                scenario_id=identity.scenario_id,
                 current_date_time=current_date_time,
                 duration_ms=elapsed_ms,
             ),

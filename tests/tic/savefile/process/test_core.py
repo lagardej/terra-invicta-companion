@@ -8,7 +8,7 @@ import pytest
 from returns.result import Failure, Result, Success
 
 from tic.savefile._events import (
-    SavefileProcessingSucceeded,
+    SavefileProcessed,
 )
 from tic.savefile.process.core.command import (
     AlreadyProcessedFailure,
@@ -18,8 +18,7 @@ from tic.savefile.process.core.command import (
     SavefileState,
     handle_process_savefile,
 )
-from tic.savefile.process.core.extracted_data import ExtractedCampaignData
-from tic.savefile.process.core.identity import Identity
+from tic.savefile.process.core.extracted_data import ExtractedCampaignData, Identity
 from tic.shared.command import CommandContext
 
 from .conftest import valid_savefile_data
@@ -30,7 +29,7 @@ _CURRENT_DATE_TIME = datetime(2022, 6, 15, tzinfo=UTC)
 _CAMPAIGN_START = datetime(2019, 12, 31, 23, 59, 30, 500_000, tzinfo=UTC)
 _IDENTITY = Identity(
     real_world_campaign_start=_CAMPAIGN_START,
-    player_faction=7,
+    scenario_id="scenario-template",
 )
 
 
@@ -62,7 +61,7 @@ class TestSuccessPath:
 
         assert isinstance(result, Success)
         process_result = result.unwrap()
-        assert isinstance(process_result.status_event, SavefileProcessingSucceeded)
+        assert isinstance(process_result.event, SavefileProcessed)
         assert len(process_result.extracted_data) > 0
         assert isinstance(process_result.extracted_data[0], ExtractedCampaignData)
 

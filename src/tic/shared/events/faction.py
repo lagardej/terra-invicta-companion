@@ -11,14 +11,15 @@ from tic.shared.models import Resources
 class FactionDataExtracted(IntegrationEvent):
     """Emitted when faction data was extracted from a savefile."""
 
-    id: int
     abductions: int
     armies: tuple[int, ...]
     atrocities: int
+    campaign_id: int
     councilors: tuple[int, ...]
     current_date_time: datetime
     fleets: tuple[int, ...]
+    id: int
     is_ai: bool
     mission_control_usage: int
-    template_name: str
     resources: Resources
+    template_name: str

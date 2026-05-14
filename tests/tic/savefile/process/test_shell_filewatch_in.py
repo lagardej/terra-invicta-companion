@@ -14,17 +14,17 @@ from tic._infra.bus_in_memory import MessageBusInMemory
 from tic._infra.event_store_in_memory import EventStoreInMemory
 from tic.savefile._events import (
     SavefileCampaignDataExtracted,
-    SavefileIdentityExtractionFailed,
-    SavefileProcessingFailed,
-    SavefileProcessingSucceeded,
+    SavefileProcessed,
 )
 from tic.savefile.process.core.command import ProcessResult, SavefileState
-from tic.savefile.process.core.extracted_data import ExtractedCampaignData
+from tic.savefile.process.core.extracted_data import (
+    ExtractedCampaignData,
+    Identity,
+)
 from tic.savefile.process.core.extracted_data import (
     ScenarioCustomizations as ExtractedScenarioCustomizations,
 )
-from tic.savefile.process.core.identity import Identity
-from tic.savefile.process.shell.filewatch_in import FilewatchIn
+from tic.savefile.process.shell.filewatch_in import SavefileProcessFilewatchIn
 from tic.shared.event_store import EventFilter
 from tic.shared.events.base import Message
 
@@ -77,7 +77,7 @@ def _campaign_data() -> ExtractedCampaignData:
             variable_project_unlocks=False,
         ),
         start_difficulty=2,
-        template_name="tpl",
+        scenario_key="tpl",
     )
 
 
@@ -92,9 +92,9 @@ class TestSuccessPath:
 
         extracted = _campaign_data()
         process_result = ProcessResult(
-            status_event=SavefileProcessingSucceeded(
+            event=SavefileProcessed(
                 real_world_campaign_start=_REAL_WORLD_CAMPAIGN_START,
-                player_faction=7,
+                scenario_id="scenario-template",
                 current_date_time=_CURRENT_DATE_TIME,
                 duration_ms=12,
             ),
@@ -103,13 +103,13 @@ class TestSuccessPath:
         mock_handle = AsyncMock(return_value=Success(process_result))
         bus = MessageBusInMemory()
         event_store = EventStoreInMemory()
-        filewatch_in = FilewatchIn(bus, event_store)
+        filewatch_in = SavefileProcessFilewatchIn(bus, event_store)
         published_domain_events: list[Message] = []
 
         async def capture_domain_event(event: Message) -> None:
             published_domain_events.append(event)
 
-        bus.subscribe(SavefileProcessingSucceeded, capture_domain_event)
+        bus.subscribe(SavefileProcessed, capture_domain_event)
         bus.subscribe(SavefileCampaignDataExtracted, capture_domain_event)
 
         _patch = "tic.savefile.process.shell.filewatch_in.handle_process_savefile"
@@ -120,24 +120,24 @@ class TestSuccessPath:
         command, context = mock_handle.call_args.args
         assert command.identity == Identity(
             real_world_campaign_start=_REAL_WORLD_CAMPAIGN_START,
-            player_faction=7,
+            scenario_id="scenario-template",
         )
         assert command.current_date_time == _CURRENT_DATE_TIME
         assert context.state == SavefileState(current_date_time=None)
 
         persisted = await event_store.query(
             EventFilter(
-                event_types=(SavefileProcessingSucceeded.type(),),
+                event_types=(SavefileProcessed.type(),),
                 payload_predicates={
                     "real_world_campaign_start": _REAL_WORLD_CAMPAIGN_START,
-                    "player_faction": 7,
+                    "scenario_id": "scenario-template",
                 },
             )
         )
         assert len(persisted.events) == 1
 
         assert len(published_domain_events) == 2
-        assert isinstance(published_domain_events[0], SavefileProcessingSucceeded)
+        assert isinstance(published_domain_events[0], SavefileProcessed)
         assert isinstance(published_domain_events[1], SavefileCampaignDataExtracted)
 
 
@@ -153,26 +153,24 @@ class TestFailures:
         mock_handle = AsyncMock()
         bus = MessageBusInMemory()
         event_store = EventStoreInMemory()
-        filewatch_in = FilewatchIn(bus, event_store)
+        filewatch_in = SavefileProcessFilewatchIn(bus, event_store)
         published_events: list[Message] = []
 
-        async def capture_failure(event: Message) -> None:
+        async def capture_processed(event: Message) -> None:
             published_events.append(event)
 
-        bus.subscribe(SavefileIdentityExtractionFailed, capture_failure)
+        bus.subscribe(SavefileProcessed, capture_processed)
 
         _patch = "tic.savefile.process.shell.filewatch_in.handle_process_savefile"
         with patch(_patch, mock_handle):
             await filewatch_in._process_savefile(savefile_path)
 
         assert mock_handle.call_count == 0
-        # Identity extraction failure is observable via integration event only.
-        failed = await event_store.query(
+        processed = await event_store.query(
             EventFilter(
-                event_types=(SavefileProcessingFailed.type(),),
+                event_types=(SavefileProcessed.type(),),
                 payload_predicates={},
             )
         )
-        assert len(failed.events) == 0
-        assert len(published_events) == 1
-        assert isinstance(published_events[0], SavefileIdentityExtractionFailed)
+        assert len(processed.events) == 0
+        assert published_events == []

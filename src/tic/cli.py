@@ -7,7 +7,7 @@ import asyncio
 import uvicorn
 
 from tic._config import boot
-from tic.savefile.process.shell.filewatch_in import FilewatchIn
+from tic.savefile.process.shell.filewatch_in import SavefileProcessFilewatchIn
 from tic.shared.application import Application
 from tic.shared.event_store import EventStore
 from tic.shared.message_bus import MessageBus
@@ -31,5 +31,5 @@ async def _run(app: Application) -> None:
 
     await asyncio.gather(
         web_server.serve(),
-        FilewatchIn(message_bus, event_store).watch(watch_dir),
+        SavefileProcessFilewatchIn(message_bus, event_store).watch(watch_dir),
     )

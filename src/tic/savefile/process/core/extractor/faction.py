@@ -8,22 +8,20 @@ import cattr
 from pydantic import AliasChoices, BaseModel, Field
 from returns.result import Failure, Result
 
+from tic.savefile.process.core.data_validator import ValidationFailure, validate_data
 from tic.savefile.process.core.extracted_data import ExtractedFactionData
-from tic.savefile.process.core.validation import ValidationFailure, validate_input
-from tic.shared.log_call import log_call
 from tic.shared.models import Resources
 
 _CONVERTER = cattr.Converter()
 _CONVERTER.register_structure_hook(tuple, lambda v, t: tuple(v))
 
 
-@log_call()
-def process_factions(
+def extract_factions(
     data: dict, current_date_time: datetime
 ) -> Result[tuple[ExtractedFactionData, ...], ValidationFailure]:
     """Map raw savefile data to extracted faction data."""
     return (
-        validate_input(_FactionInput, data)
+        validate_data(_FactionInput, data)
         .bind(_to_faction_player_pairs)
         .map(
             lambda pairs: tuple(

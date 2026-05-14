@@ -7,6 +7,14 @@ from tic.shared.models import Resources
 
 
 @dataclass(frozen=True)
+class Identity:
+    """Fields that uniquely identify a processed savefile."""
+
+    real_world_campaign_start: datetime
+    scenario_id: str
+
+
+@dataclass(frozen=True)
 class ExtractedCampaignData:
     """Raw campaign data extracted from a savefile."""
 
@@ -19,7 +27,7 @@ class ExtractedCampaignData:
     real_world_campaign_start: datetime
     scenario_customizations: ScenarioCustomizations
     start_difficulty: int
-    template_name: str
+    scenario_key: str
 
 
 @dataclass(frozen=True)

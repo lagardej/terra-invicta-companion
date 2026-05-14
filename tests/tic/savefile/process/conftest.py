@@ -6,11 +6,11 @@ import pytest
 
 from tests.tic.conftest import E2ERuntimeBuilder
 from tic.savefile._events import (
-    SavefileIdentityExtractionFailed,
-    SavefileProcessingFailed,
-    SavefileProcessingSucceeded,
+    SavefileProcessed,
 )
-from tic.savefile.process.shell.bus_out import BusOut as SavefileProcessBusOut
+from tic.savefile.process.shell.bus_out import (
+    SavefileProcessBusOut as SavefileProcessBusOut,
+)
 from tic.shared.events.campaign import CampaignDataExtracted
 from tic.shared.events.faction import FactionDataExtracted
 from tic.shared.message_bus import MessageBus, Subscription
@@ -29,9 +29,7 @@ def savefile_process_runtime(e2e_runtime_builder: E2ERuntimeBuilder) -> object:
     return e2e_runtime_builder(
         subscription_factories=(savefile_processing_publisher_subscriptions,),
         capture_event_types=(
-            SavefileProcessingSucceeded,
-            SavefileProcessingFailed,
-            SavefileIdentityExtractionFailed,
+            SavefileProcessed,
             CampaignDataExtracted,
             FactionDataExtracted,
         ),
@@ -115,6 +113,7 @@ def time_state_dict() -> dict:
                 "second": 0,
                 "millisecond": 0,
             },
+            "scenarioMetaTemplateName": "scenario-template",
             "templateName": "tpl",
         },
     }

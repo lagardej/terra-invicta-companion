@@ -16,7 +16,7 @@ from tic.shared.http_module import HttpModule
 _TEMPLATES_DIR = Path(__file__).parents[4] / "templates"
 
 
-class HttpIn(HttpModule):
+class SavefileListHttpIn(HttpModule):
     """Exposes the savefile log over HTTP."""
 
     def __init__(self, store: DocumentStore[SavefileLogEntry]) -> None:
