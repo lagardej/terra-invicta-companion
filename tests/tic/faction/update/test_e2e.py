@@ -10,7 +10,7 @@ from framework.event_store import EventStore
 from framework.message_bus import MessageBus, Subscription
 from tests.tic.conftest import E2ERuntime, E2ERuntimeBuilder
 from tic.faction.shared_events import FactionUpdated
-from tic.faction.update.shell_bus_in import BusIn as FactionUpdateBusIn
+from tic.faction.update.shell_bus_in import FactionUpdateBusIn
 from tic.shared.events.faction import FactionDataExtracted
 from tic.shared.models import Resources
 

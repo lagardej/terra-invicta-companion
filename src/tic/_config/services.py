@@ -4,7 +4,7 @@ from framework.document_store import DocumentStore
 from framework.event_store import EventStore
 from framework.message_bus import MessageBus
 from tic._config.profiles import Profile
-from tic.faction.update.shell_bus_in import BusIn as FactionUpdateBusIn
+from tic.faction.update.shell_bus_in import FactionUpdateBusIn
 from tic.home.shell_http_in import HomeHttpIn as HomeHttpIn
 from tic.savefile.list.document import SavefileLogEntry
 from tic.savefile.list.shell_bus_in import SavefileListBusIn as SavefileListBusIn

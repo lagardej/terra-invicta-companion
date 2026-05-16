@@ -12,7 +12,7 @@ from tic.faction.update.core import FactionState, UpdateFaction, handle_update_f
 from tic.shared.events.faction import FactionDataExtracted
 
 
-class BusIn:
+class FactionUpdateBusIn:
     """Subscribe to faction integration events and persist domain updates."""
 
     def __init__(self, bus: MessageBus, event_store: EventStore) -> None:
