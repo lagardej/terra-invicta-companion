@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
+from framework.event_store import EventFilter
 from tests.tic.conftest import E2ERuntime
 from tic.savefile._events import (
     SavefileProcessed,
 )
 from tic.savefile.process.shell.filewatch_in import SavefileProcessFilewatchIn
-from tic.shared.event_store import EventFilter
 from tic.shared.events.campaign import CampaignDataExtracted
 from tic.shared.events.faction import FactionDataExtracted
 

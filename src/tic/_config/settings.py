@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from tic.shared.application import AppSettings
+from framework.application import AppSettings
 
 
 class ConfigurationError(Exception):

@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from dataclasses import fields
 
-from tic.shared.event_store import (
+from framework.event_store import (
     ConcurrencyError,
     EventFilter,
     EventStore,
     QueryResult,
 )
-from tic.shared.events.base import DomainEvent
-from tic.shared.log_call import log_call
+from framework.events import DomainEvent
+from framework.log_call import log_call
 
 
 class EventStoreInMemory(EventStore):

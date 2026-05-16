@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from tic.shared.document_store import DocumentStore
-from tic.shared.log_call import log_call
+from framework.document_store import DocumentStore
+from framework.log_call import log_call
 
 
 class DocumentStoreInMemory[T](DocumentStore[T]):

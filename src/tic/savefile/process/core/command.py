@@ -10,6 +10,8 @@ from functools import reduce
 
 from returns.result import Failure, Result, Success
 
+from framework.command import CommandContext
+from framework.log_call import log_call
 from tic.savefile._events import SavefileProcessed
 from tic.savefile.process.core.data_validator import ValidationFailure
 from tic.savefile.process.core.extracted_data import (
@@ -18,8 +20,6 @@ from tic.savefile.process.core.extracted_data import (
     Identity,
 )
 from tic.savefile.process.core.extractor import extract_campaign, extract_factions
-from tic.shared.command import CommandContext
-from tic.shared.log_call import log_call
 
 # — Type aliases
 

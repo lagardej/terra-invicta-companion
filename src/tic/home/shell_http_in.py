@@ -9,12 +9,12 @@ from fastapi.requests import Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from tic.shared.http_module import HttpModule
+from framework.http_module import HttpModule
 
 _TEMPLATES_DIR = Path(__file__).parents[3] / "templates"
 
 
-class HttpIn(HttpModule):
+class HomeHttpIn(HttpModule):
     """Serves the application homepage."""
 
     def router(self) -> APIRouter:

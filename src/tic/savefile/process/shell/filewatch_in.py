@@ -11,6 +11,11 @@ from pathlib import Path
 from returns.result import Failure, Success
 from watchfiles import Change, awatch
 
+from framework.command import CommandContext
+from framework.event_store import EventFilter, EventStore
+from framework.events import DomainEvent, Message
+from framework.log_call import log_call
+from framework.message_bus import MessageBus
 from tic.savefile._events import (
     SavefileCampaignDataExtracted,
     SavefileFactionDataExtracted,
@@ -31,11 +36,6 @@ from tic.savefile.process.core.extractor.current_date_time import (
     extract_current_date_time,
 )
 from tic.savefile.process.core.extractor.identity import extract_identity
-from tic.shared.command import CommandContext
-from tic.shared.event_store import EventFilter, EventStore
-from tic.shared.events.base import DomainEvent, Message
-from tic.shared.log_call import log_call
-from tic.shared.message_bus import MessageBus
 
 _log = logging.getLogger(__name__)
 

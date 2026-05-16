@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from framework.command import CommandContext
+from framework.log_call import log_call
 from tic.faction.shared_events import FactionUpdated
-from tic.shared.command import CommandContext
-from tic.shared.log_call import log_call
 from tic.shared.models import Resources
 
 

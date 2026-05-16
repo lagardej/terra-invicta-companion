@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Sequence
 from typing import cast, overload
 
-from tic.shared.events.base import Message
+from framework.events import Message
 
 Handler = Callable[[Message], Awaitable[None]]
 Subscription = tuple[type[Message], Handler]

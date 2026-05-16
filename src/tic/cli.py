@@ -6,11 +6,11 @@ import asyncio
 
 import uvicorn
 
+from framework.application import Application
+from framework.event_store import EventStore
+from framework.message_bus import MessageBus
 from tic._config import boot
 from tic.savefile.process.shell.filewatch_in import SavefileProcessFilewatchIn
-from tic.shared.application import Application
-from tic.shared.event_store import EventStore
-from tic.shared.message_bus import MessageBus
 
 
 def main() -> None:

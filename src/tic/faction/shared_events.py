@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from tic.shared.events.base import DomainEvent
+from framework.events import DomainEvent
 from tic.shared.models import Resources
 
 

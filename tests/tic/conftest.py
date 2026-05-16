@@ -9,10 +9,10 @@ from typing import TypeVar, cast
 
 import pytest
 
+from framework.events import Message
+from framework.message_bus import Subscription
 from tic._infra.bus_in_memory import MessageBusInMemory
 from tic._infra.event_store_in_memory import EventStoreInMemory
-from tic.shared.events.base import Message
-from tic.shared.message_bus import Subscription
 
 type SubscriptionFactory = Callable[..., tuple[Subscription, ...]]
 type E2ERuntimeBuilder = Callable[..., E2ERuntime]

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from tic.shared.events.base import IntegrationEvent
+from framework.events import IntegrationEvent
 
 
 @dataclass(frozen=True)

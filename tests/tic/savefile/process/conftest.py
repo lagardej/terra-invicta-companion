@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from framework.message_bus import MessageBus, Subscription
 from tests.tic.conftest import E2ERuntimeBuilder
 from tic.savefile._events import (
     SavefileProcessed,
@@ -13,7 +14,6 @@ from tic.savefile.process.shell.bus_out import (
 )
 from tic.shared.events.campaign import CampaignDataExtracted
 from tic.shared.events.faction import FactionDataExtracted
-from tic.shared.message_bus import MessageBus, Subscription
 
 
 def savefile_processing_publisher_subscriptions(

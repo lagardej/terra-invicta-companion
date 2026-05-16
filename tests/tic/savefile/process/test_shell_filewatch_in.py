@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from returns.result import Success
 
+from framework.event_store import EventFilter
+from framework.events import Message
 from tic._infra.bus_in_memory import MessageBusInMemory
 from tic._infra.event_store_in_memory import EventStoreInMemory
 from tic.savefile._events import (
@@ -25,8 +27,6 @@ from tic.savefile.process.core.extracted_data import (
     ScenarioCustomizations as ExtractedScenarioCustomizations,
 )
 from tic.savefile.process.shell.filewatch_in import SavefileProcessFilewatchIn
-from tic.shared.event_store import EventFilter
-from tic.shared.events.base import Message
 
 from .conftest import valid_savefile_data
 

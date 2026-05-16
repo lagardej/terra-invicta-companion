@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from framework.events import Message
 from tic._infra.bus_in_memory import MessageBusInMemory
 from tic.savefile._events import (
     SavefileCampaignDataExtracted,
@@ -21,7 +22,6 @@ from tic.savefile.process.core.extracted_data import (
 from tic.savefile.process.shell.bus_out import (
     SavefileProcessBusOut as SavefileProcessBusOut,
 )
-from tic.shared.events.base import Message
 from tic.shared.events.campaign import CampaignDataExtracted, ScenarioCustomizations
 from tic.shared.events.faction import FactionDataExtracted
 from tic.shared.models import Resources

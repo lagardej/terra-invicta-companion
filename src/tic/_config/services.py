@@ -1,17 +1,17 @@
 from lagom import ExplicitContainer
 
+from framework.document_store import DocumentStore
+from framework.event_store import EventStore
+from framework.message_bus import MessageBus
 from tic._config.profiles import Profile
 from tic.faction.update.shell_bus_in import BusIn as FactionUpdateBusIn
-from tic.home.shell_http_in import HttpIn as HomeHttpIn
+from tic.home.shell_http_in import HomeHttpIn as HomeHttpIn
 from tic.savefile.list.document import SavefileLogEntry
 from tic.savefile.list.shell_bus_in import SavefileListBusIn as SavefileListBusIn
 from tic.savefile.list.shell_http_in import SavefileListHttpIn as SavefileListHttpIn
 from tic.savefile.process.shell.bus_out import (
     SavefileProcessBusOut as SavefileProcessBusOut,
 )
-from tic.shared.document_store import DocumentStore
-from tic.shared.event_store import EventStore
-from tic.shared.message_bus import MessageBus
 
 
 def register_services(container: ExplicitContainer, profile: Profile) -> None:

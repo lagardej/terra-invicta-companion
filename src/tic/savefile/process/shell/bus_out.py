@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+from framework.events import Message
+from framework.log_call import log_call
+from framework.message_bus import MessageBus, Subscription
 from tic.savefile._events import (
     SavefileCampaignDataExtracted,
     SavefileFactionDataExtracted,
 )
-from tic.shared.events.base import Message
 from tic.shared.events.campaign import CampaignDataExtracted, ScenarioCustomizations
 from tic.shared.events.faction import FactionDataExtracted
-from tic.shared.log_call import log_call
-from tic.shared.message_bus import MessageBus, Subscription
 
 
 class SavefileProcessBusOut:

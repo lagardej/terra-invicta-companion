@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from framework.application import Application
 from tic._config.bootstrap import boot
-from tic.shared.application import Application
 
 
 @pytest.fixture(autouse=True)

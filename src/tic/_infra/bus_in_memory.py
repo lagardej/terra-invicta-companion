@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from tic.shared.events.base import Message
-from tic.shared.log_call import log_call
-from tic.shared.message_bus import Handler, MessageBus
+from framework.events import Message
+from framework.log_call import log_call
+from framework.message_bus import Handler, MessageBus
 
 
 class MessageBusInMemory(MessageBus):

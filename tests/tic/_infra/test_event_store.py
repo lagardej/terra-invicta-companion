@@ -7,9 +7,9 @@ from datetime import UTC, datetime
 
 import pytest
 
+from framework.event_store import ConcurrencyError, EventFilter, QueryResult
+from framework.events import DomainEvent
 from tic._infra.event_store_in_memory import EventStoreInMemory
-from tic.shared.event_store import ConcurrencyError, EventFilter, QueryResult
-from tic.shared.events.base import DomainEvent
 
 pytestmark = pytest.mark.unit
 

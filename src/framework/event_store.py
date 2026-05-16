@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
-from tic.shared.events.base import DomainEvent
+from framework.events import DomainEvent
 
 
 class ConcurrencyError(Exception):

@@ -6,8 +6,8 @@ from dataclasses import dataclass
 
 import pytest
 
+from framework.events import DomainEvent, IntegrationEvent
 from tic._infra.bus_in_memory import MessageBusInMemory
-from tic.shared.events.base import DomainEvent, IntegrationEvent
 
 pytestmark = pytest.mark.unit
 

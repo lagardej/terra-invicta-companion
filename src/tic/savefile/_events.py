@@ -3,11 +3,11 @@
 from dataclasses import dataclass
 from datetime import datetime
 
+from framework.events import DomainEvent, Event
 from tic.savefile.process.core.extracted_data import (
     ExtractedCampaignData,
     ExtractedFactionData,
 )
-from tic.shared.events.base import DomainEvent, Event
 
 
 @dataclass(frozen=True)

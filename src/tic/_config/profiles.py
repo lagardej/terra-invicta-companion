@@ -3,13 +3,13 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from framework.document_store import DocumentStore
+from framework.event_store import EventStore
+from framework.message_bus import MessageBus
 from tic._infra.bus_in_memory import MessageBusInMemory
 from tic._infra.document_store_in_memory import DocumentStoreInMemory
 from tic._infra.event_store_in_memory import EventStoreInMemory
 from tic.savefile.list.document import SavefileLogEntry
-from tic.shared.document_store import DocumentStore
-from tic.shared.event_store import EventStore
-from tic.shared.message_bus import MessageBus
 
 
 @dataclass(frozen=True)

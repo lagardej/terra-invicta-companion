@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 import pytest
 from returns.result import Failure, Result, Success
 
+from framework.command import CommandContext
 from tic.savefile._events import (
     SavefileProcessed,
 )
@@ -19,7 +20,6 @@ from tic.savefile.process.core.command import (
     handle_process_savefile,
 )
 from tic.savefile.process.core.extracted_data import ExtractedCampaignData, Identity
-from tic.shared.command import CommandContext
 
 from .conftest import valid_savefile_data
 

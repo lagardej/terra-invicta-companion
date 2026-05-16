@@ -9,11 +9,11 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from lagom import ExplicitContainer
 
+from framework.application import Application
 from tic._config.logging import configure as configure_logging
 from tic._config.profiles import PROFILES, DevProfile
 from tic._config.services import register_services
 from tic._config.settings import ConfigurationError, TicSettings
-from tic.shared.application import Application
 
 
 def boot() -> Application[TicSettings]:

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from tic.shared.events.base import IntegrationEvent
+from framework.events import IntegrationEvent
 
 
 @dataclass(frozen=True)
