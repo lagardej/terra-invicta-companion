@@ -8,8 +8,11 @@ import cattr
 from pydantic import AliasChoices, BaseModel, Field
 from returns.result import Failure, Result
 
-from tic.savefile.process.core.data_validator import ValidationFailure, validate_data
 from tic.savefile.process.core.extracted_data import ExtractedFactionData
+from tic.savefile.process.core.extractor._data_validator import (
+    ValidationFailure,
+    validate_data,
+)
 from tic.shared.models import Resources
 
 _CONVERTER = cattr.Converter()

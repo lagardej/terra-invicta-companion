@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 import pytest
 from returns.result import Failure, Result, Success
 
-from framework.command import CommandContext
+from framework.events import DomainEvent
 from tic.savefile._events import (
     SavefileProcessed,
 )
@@ -16,7 +17,6 @@ from tic.savefile.process.core.command import (
     ProcessingFailure,
     ProcessResult,
     ProcessSavefile,
-    SavefileState,
     handle_process_savefile,
 )
 from tic.savefile.process.core.extracted_data import ExtractedCampaignData, Identity
@@ -33,10 +33,19 @@ _IDENTITY = Identity(
 )
 
 
-def _context(
+def _events(
     current_date_time: datetime | None = None,
-) -> CommandContext[SavefileState]:
-    return CommandContext(state=SavefileState(current_date_time=current_date_time))
+) -> Sequence[DomainEvent]:
+    if current_date_time is None:
+        return ()
+    return (
+        SavefileProcessed(
+            real_world_campaign_start=_CAMPAIGN_START,
+            scenario_id="scenario-template",
+            current_date_time=current_date_time,
+            duration_ms=10,
+        ),
+    )
 
 
 def _command(data: dict | None = None) -> ProcessSavefile:
@@ -49,15 +58,15 @@ def _command(data: dict | None = None) -> ProcessSavefile:
 
 async def _handle(
     command: ProcessSavefile,
-    context: CommandContext[SavefileState],
+    events: Sequence[DomainEvent],
 ) -> Result[ProcessResult, ProcessingFailure]:
-    return await handle_process_savefile(command, context)
+    return await handle_process_savefile(command, events)
 
 
 class TestSuccessPath:
     @pytest.mark.asyncio
     async def test_returns_success_domain_event_with_extracted_data(self) -> None:
-        result = await _handle(_command(), _context())
+        result = await _handle(_command(), _events())
 
         assert isinstance(result, Success)
         process_result = result.unwrap()
@@ -73,7 +82,7 @@ class TestFailures:
     ) -> None:
         result = await _handle(
             _command(),
-            _context(current_date_time=datetime(2099, 1, 1, tzinfo=UTC)),
+            _events(current_date_time=datetime(2099, 1, 1, tzinfo=UTC)),
         )
 
         assert isinstance(result, Failure)

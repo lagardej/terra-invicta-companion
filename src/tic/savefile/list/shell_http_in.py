@@ -10,8 +10,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from framework.document_store import DocumentStore
-from tic.savefile.list.document import SavefileLogEntry
 from framework.http_module import HttpModule
+from tic.savefile.list.document import SavefileLogEntry
 
 _TEMPLATES_DIR = Path(__file__).parents[4] / "templates"
 

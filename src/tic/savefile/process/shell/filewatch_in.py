@@ -5,26 +5,23 @@ from __future__ import annotations
 import gzip
 import json
 import logging
-from collections.abc import Sequence
 from pathlib import Path
 
 from returns.result import Failure, Success
 from watchfiles import Change, awatch
 
-from framework.command import CommandContext
 from framework.event_store import EventFilter, EventStore
-from framework.events import DomainEvent, Message
+from framework.events import Message
 from framework.log_call import log_call
 from framework.message_bus import MessageBus
 from tic.savefile._events import (
     SavefileCampaignDataExtracted,
     SavefileFactionDataExtracted,
-    SavefileProcessed,
 )
 from tic.savefile.process.core.command import (
+    EVENT_TYPES,
     ExtractedData,
     ProcessSavefile,
-    SavefileState,
     handle_process_savefile,
 )
 from tic.savefile.process.core.extracted_data import (
@@ -96,9 +93,8 @@ class SavefileProcessFilewatchIn:
         query_result = await self._event_store.query(filter)
 
         command = ProcessSavefile(data, identity, current_date_time)
-        context = _create_context(query_result.events)
 
-        result = await handle_process_savefile(command, context)
+        result = await handle_process_savefile(command, query_result.events)
 
         match result:
             case Failure(failure_value):
@@ -130,21 +126,12 @@ def _parse_constant(c: str) -> float:
 
 def _event_filter(identity: Identity) -> EventFilter:
     return EventFilter(
-        event_types=(SavefileProcessed.type(),),
+        event_types=EVENT_TYPES,
         payload_predicates={
             "real_world_campaign_start": identity.real_world_campaign_start,
             "scenario_id": identity.scenario_id,
         },
     )
-
-
-def _create_context(events: Sequence[DomainEvent]) -> CommandContext:
-    state = SavefileState(current_date_time=None)
-    for event in events:
-        if isinstance(event, SavefileProcessed):
-            state = SavefileState(current_date_time=event.current_date_time)
-
-    return CommandContext(state)
 
 
 def _to_coordination_events(

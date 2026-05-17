@@ -1,32 +1,49 @@
-"""Savefile command handler — functional core, no I/O."""
+"""Savefile command handler — functional core, no I/O.
+
+Structure:
+  Outcomes
+    ProcessResult
+    AlreadyProcessedFailure
+    DataProcessingFailure
+  Command
+    ProcessSavefile
+  Command handler
+    EVENT_TYPES
+    SavefileState
+    _Processor
+    _PROCESSORS
+    handle_process_savefile
+    _build_state
+    _is_already_processed
+    _process
+    _to_success
+"""
 
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from functools import reduce
 
 from returns.result import Failure, Result, Success
 
-from framework.command import CommandContext
+from framework.events import DomainEvent
 from framework.log_call import log_call
 from tic.savefile._events import SavefileProcessed
-from tic.savefile.process.core.data_validator import ValidationFailure
 from tic.savefile.process.core.extracted_data import (
     ExtractedCampaignData,
     ExtractedFactionData,
     Identity,
 )
 from tic.savefile.process.core.extractor import extract_campaign, extract_factions
+from tic.savefile.process.core.extractor._data_validator import ValidationFailure
 
-# — Type aliases
-
+#
+# — Outcomes
+#
 ExtractedData = ExtractedCampaignData | ExtractedFactionData
-
-
-# — Success result (outcome of successful processing)
 
 
 @dataclass(frozen=True)
@@ -35,9 +52,6 @@ class ProcessResult:
 
     event: SavefileProcessed
     extracted_data: tuple[ExtractedData, ...]
-
-
-# — Failures (domain semantics)
 
 
 @dataclass(frozen=True)
@@ -55,9 +69,9 @@ class DataProcessingFailure:
 ProcessingFailure = AlreadyProcessedFailure | DataProcessingFailure
 
 
-# — Command (input to the handler)
-
-
+#
+# — Command
+#
 @dataclass(frozen=True)
 class ProcessSavefile:
     """Command to process a raw savefile payload."""
@@ -67,7 +81,10 @@ class ProcessSavefile:
     current_date_time: datetime
 
 
-# — Aggregate state (context for duplicate checking)
+#
+# — Command handler
+#
+EVENT_TYPES = (SavefileProcessed.type(),)
 
 
 @dataclass(frozen=True)
@@ -77,27 +94,21 @@ class SavefileState:
     current_date_time: datetime | None
 
 
-# — Processor interface (contract for data extraction)
-
-
 type _Processor = Callable[
     [dict, datetime], Result[tuple[ExtractedData, ...], ValidationFailure]
 ]
 
 
-# — Handler implementation (functional core orchestrator)
-
-
-_processors: list[_Processor] = [
+_PROCESSORS: Sequence[_Processor] = (
     extract_campaign,
     extract_factions,
-]
+)
 
 
 @log_call()
 async def handle_process_savefile(
     command: ProcessSavefile,
-    context: CommandContext[SavefileState],
+    events: Sequence[DomainEvent],
 ) -> Result[ProcessResult, ProcessingFailure]:
     """Run scoped processors against raw savefile data.
 
@@ -107,12 +118,13 @@ async def handle_process_savefile(
     """
     identity = command.identity
     current_date_time = command.current_date_time
+    state = _build_state(events)
 
-    if _is_already_processed(current_date_time, context.state):
+    if _is_already_processed(current_date_time, state):
         return Failure(AlreadyProcessedFailure())
 
     t0 = time.perf_counter()
-    process_result = _process(_processors, command.data, current_date_time)
+    process_result = _process(_PROCESSORS, command)
     elapsed_ms = int(round((time.perf_counter() - t0) * 1000))
 
     match process_result:
@@ -124,10 +136,28 @@ async def handle_process_savefile(
             raise AssertionError(f"Unexpected result: {unreachable}")
 
 
-def _process(
-    processors: list[_Processor],
-    data: dict,
+def _build_state(events: Sequence[DomainEvent]) -> SavefileState:
+    """Reconstruct SavefileState from event history."""
+    state = SavefileState(current_date_time=None)
+    for event in events:
+        if isinstance(event, SavefileProcessed):
+            state = SavefileState(current_date_time=event.current_date_time)
+    return state
+
+
+def _is_already_processed(
     current_date_time: datetime,
+    state: SavefileState,
+) -> bool:
+    return (
+        state.current_date_time is not None
+        and current_date_time <= state.current_date_time
+    )
+
+
+def _process(
+    processors: Sequence[_Processor],
+    command: ProcessSavefile,
 ) -> Result[tuple[ExtractedData, ...], DataProcessingFailure]:
     """Run all processors and aggregate extracted data or processing violations."""
 
@@ -136,7 +166,7 @@ def _process(
         processor: _Processor,
     ) -> tuple[tuple[ExtractedData, ...], tuple[str, ...]]:
         extracted_acc, failures_acc = acc_tuple
-        match processor(data, current_date_time):
+        match processor(command.data, command.current_date_time):
             case Success(extracted):
                 return (extracted_acc + tuple(extracted), failures_acc)
             case Failure(vf):
@@ -166,18 +196,4 @@ def _to_success(
             ),
             extracted_data=extracted_data,
         )
-    )
-
-
-# — Domain predicates
-
-
-def _is_already_processed(
-    current_date_time: datetime,
-    state: SavefileState | None,
-) -> bool:
-    return (
-        state is not None
-        and state.current_date_time is not None
-        and current_date_time <= state.current_date_time
     )

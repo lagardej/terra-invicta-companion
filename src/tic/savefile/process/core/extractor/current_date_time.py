@@ -7,8 +7,11 @@ from datetime import datetime
 from pydantic import AliasChoices, BaseModel, Field
 from returns.result import Failure, Result
 
-from tic.savefile.process.core.data_validator import ValidationFailure, validate_data
 from tic.savefile.process.core.epoch import EpochModel, to_datetime
+from tic.savefile.process.core.extractor._data_validator import (
+    ValidationFailure,
+    validate_data,
+)
 
 
 def extract_current_date_time(data: dict) -> Result[datetime, ValidationFailure]:

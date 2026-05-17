@@ -18,7 +18,7 @@ from tic.savefile._events import (
     SavefileCampaignDataExtracted,
     SavefileProcessed,
 )
-from tic.savefile.process.core.command import ProcessResult, SavefileState
+from tic.savefile.process.core.command import ProcessResult
 from tic.savefile.process.core.extracted_data import (
     ExtractedCampaignData,
     Identity,
@@ -117,13 +117,13 @@ class TestSuccessPath:
             await filewatch_in._process_savefile(savefile_path)
 
         assert mock_handle.call_count == 1
-        command, context = mock_handle.call_args.args
+        command, events = mock_handle.call_args.args
         assert command.identity == Identity(
             real_world_campaign_start=_REAL_WORLD_CAMPAIGN_START,
             scenario_id="scenario-template",
         )
         assert command.current_date_time == _CURRENT_DATE_TIME
-        assert context.state == SavefileState(current_date_time=None)
+        assert len(events) == 0
 
         persisted = await event_store.query(
             EventFilter(

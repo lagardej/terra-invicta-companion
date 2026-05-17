@@ -9,11 +9,14 @@ import cattr
 from pydantic import AliasChoices, BaseModel, Field
 from returns.result import Failure, Result
 
-from tic.savefile.process.core.data_validator import ValidationFailure, validate_data
 from tic.savefile.process.core.epoch import EpochModel, to_datetime
 from tic.savefile.process.core.extracted_data import (
     ExtractedCampaignData,
     ScenarioCustomizations,
+)
+from tic.savefile.process.core.extractor._data_validator import (
+    ValidationFailure,
+    validate_data,
 )
 
 _CONVERTER = cattr.Converter()
