@@ -14,6 +14,7 @@ from tic.savefile._events import (
 )
 from tic.savefile.process.core.command import (
     AlreadyProcessedFailure,
+    DataProcessingFailure,
     ProcessingFailure,
     ProcessResult,
     ProcessSavefile,
@@ -87,3 +88,14 @@ class TestFailures:
 
         assert isinstance(result, Failure)
         assert isinstance(result.failure(), AlreadyProcessedFailure)
+
+    @pytest.mark.asyncio
+    async def test_returns_data_processing_failure_when_savefile_data_is_malformed(
+        self,
+    ) -> None:
+        result = await _handle(_command(data={"gamestates": {}}), _events())
+
+        assert isinstance(result, Failure)
+        failure = result.failure()
+        assert isinstance(failure, DataProcessingFailure)
+        assert len(failure.violations) > 0
