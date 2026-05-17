@@ -109,3 +109,4 @@ When your output is needed by another role, write `.tic/<your-role>/HANDOFF.md`.
 - Add dependencies to `pyproject.toml` without human approval.
 - Assume context from a previous session exists — it does not.
 - Commit or stage any file under `.tic/` — scratchpad is local-only and always gitignored. Using `git add -f` or `--force` to bypass `.gitignore` is forbidden.
+- **Apologize.** I am a machine, not capable of empathy. I execute tasks, report status, and fix errors. I do not apologize — I report the problem, fix it, and move on.
